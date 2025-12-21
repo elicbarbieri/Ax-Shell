@@ -29,10 +29,11 @@ class Notch(Window):
     def __init__(self, monitor_id: int = 0, **kwargs):
         self.monitor_id = monitor_id
         self.monitor_manager = None
-        
+
         # Get monitor manager
         try:
             from utils.monitor_manager import get_monitor_manager
+
             self.monitor_manager = get_monitor_manager()
         except ImportError:
             pass
@@ -144,6 +145,7 @@ class Notch(Window):
         self.VOLUME_DISPLAY_DURATION = 2000
         self._current_display_timeout_id = None
         self._suppress_first_audio_display = True
+        self._previous_compact_child = None
 
         self._typed_chars_buffer = ""
         self._launcher_transitioning = False
@@ -181,72 +183,46 @@ class Notch(Window):
         self.audio = Audio()
 
         # Volume display widgets
-        self.volume_icon = Image(
-            name="volume-display-icon",
-            icon_name="audio-volume-high-symbolic",
-            icon_size=16
-        )
+        self.volume_icon = Image(name="volume-display-icon", icon_name="audio-volume-high-symbolic", icon_size=16)
         self.volume_icon.set_valign(Gtk.Align.CENTER)
-        
-        self.volume_label = Label(
-            name="volume-display-label",
-            label="..."
-        )
+
+        self.volume_label = Label(name="volume-display-label", label="...")
         self.volume_label.set_valign(Gtk.Align.CENTER)
-        
-        self.volume_bar = Gtk.ProgressBar(
-            name="volume-display-bar"
-        )
+
+        self.volume_bar = Gtk.ProgressBar(name="volume-display-bar")
         self.volume_bar.set_fraction(1.0)
         self.volume_bar.set_show_text(False)
         self.volume_bar.set_hexpand(False)
         self.volume_bar.set_valign(Gtk.Align.CENTER)
-   
+
         self.volume_box = Box(
             name="volume-display-box",
             orientation="h",
             spacing=8,
             h_align="center",
             v_align="center",
-            children=[
-                self.volume_icon,
-                self.volume_bar,
-                self.volume_label
-            ]
+            children=[self.volume_icon, self.volume_bar, self.volume_label],
         )
-        
+
         # Microphone display widgets
-        self.mic_icon = Image(
-            name="mic-display-icon", 
-            icon_name="microphone-sensitivity-high-symbolic",
-            icon_size=16
-        )
+        self.mic_icon = Image(name="mic-display-icon", icon_name="microphone-sensitivity-high-symbolic", icon_size=16)
         self.mic_icon.set_valign(Gtk.Align.CENTER)
-        
-        self.mic_label = Label(
-            name="mic-display-label",
-            label="..."
-        )
+
+        self.mic_label = Label(name="mic-display-label", label="...")
         self.mic_label.set_valign(Gtk.Align.CENTER)
-        
-        self.mic_bar = Gtk.ProgressBar(
-            name="mic-display-bar"
-        )
+
+        self.mic_bar = Gtk.ProgressBar(name="mic-display-bar")
         self.mic_bar.set_fraction(1.0)
         self.mic_bar.set_show_text(False)
         self.mic_bar.set_valign(Gtk.Align.CENTER)
-        
+
         self.mic_box = Box(
             name="mic-display-box",
             orientation="h",
             spacing=8,
             h_align="center",
             v_align="center",
-            children=[
-                self.mic_icon,
-                self.mic_bar,
-                self.mic_label
-            ]
+            children=[self.mic_icon, self.mic_bar, self.mic_label],
         )
 
         self.window_label = Label(
@@ -255,9 +231,7 @@ class Notch(Window):
             h_align="fill",
         )
 
-        self.window_icon = Image(
-            name="notch-window-icon", icon_name="application-x-executable", icon_size=20
-        )
+        self.window_icon = Image(name="notch-window-icon", icon_name="application-x-executable", icon_size=20)
 
         self.active_window = ActiveWindow(
             name="hyprland-window",
@@ -291,22 +265,16 @@ class Notch(Window):
         self.active_window.get_children()[0].set_halign(Gtk.Align.FILL)
         self.active_window.get_children()[0].set_ellipsize(Pango.EllipsizeMode.END)
 
-        self.active_window.connect(
-            "notify::label", lambda *_: self.restore_label_properties()
-        )
+        self.active_window.connect("notify::label", lambda *_: self.restore_label_properties())
 
         self.player_small = PlayerSmall()
-        self.user_label = Label(
-            name="compact-user", label=f"{data.USERNAME}@{data.HOSTNAME}"
-        )
+        self.user_label = Label(name="compact-user", label=f"{data.USERNAME}@{data.HOSTNAME}")
 
         self.player_small.mpris_manager.connect(
             "player-appeared",
             lambda *_: self.compact_stack.set_visible_child(self.player_small),
         )
-        self.player_small.mpris_manager.connect(
-            "player-vanished", self.on_player_vanished
-        )
+        self.player_small.mpris_manager.connect("player-vanished", self.on_player_vanished)
 
         self.compact_stack = Stack(
             name="notch-compact-stack",
@@ -325,13 +293,14 @@ class Notch(Window):
         )
         self.compact_stack.set_visible_child(self.active_window_box)
 
+        # Check for existing players after UI initialization completes
+        GLib.idle_add(self._check_initial_player_state)
+
         self.compact = Gtk.EventBox(name="notch-compact")
         self.compact.set_visible(True)
         self.compact.add(self.compact_stack)
         self.compact.add_events(
-            Gdk.EventMask.SCROLL_MASK
-            | Gdk.EventMask.BUTTON_PRESS_MASK
-            | Gdk.EventMask.SMOOTH_SCROLL_MASK
+            Gdk.EventMask.SCROLL_MASK | Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.SMOOTH_SCROLL_MASK
         )
         self.compact.connect("scroll-event", self._on_compact_scroll)
         self.compact.connect(
@@ -347,8 +316,7 @@ class Notch(Window):
             v_expand=True,
             h_expand=True,
             style_classes=["invert"]
-            if (not data.VERTICAL and data.BAR_THEME in ["Dense", "Edge"])
-            and data.BAR_POSITION not in ["Bottom"]
+            if (not data.VERTICAL and data.BAR_THEME in ["Dense", "Edge"]) and data.BAR_POSITION not in ["Bottom"]
             else [],
             transition_type="crossfade",
             transition_duration=250,
@@ -371,9 +339,7 @@ class Notch(Window):
             self.stack.add_style_class(data.BAR_POSITION.lower())
             self.stack.add_style_class(data.PANEL_POSITION.lower())
 
-        if is_panel_vertical or (
-            data.PANEL_POSITION in ["Start", "End"] and data.PANEL_THEME == "Panel"
-        ):
+        if is_panel_vertical or (data.PANEL_POSITION in ["Start", "End"] and data.PANEL_THEME == "Panel"):
             self.compact.set_size_request(260, 40)
             self.launcher.set_size_request(320, 635)
             self.tmux.set_size_request(320, 635)
@@ -423,7 +389,7 @@ class Notch(Window):
             child_revealed=True,
             child=self.notch_box,
         )
-        
+
         self.notch_revealer.set_size_request(-1, 1)
 
         self.notch_complete = Box(
@@ -441,18 +407,18 @@ class Notch(Window):
                 "Dense": 50,
                 "Edge": 44,
             }.get(data.BAR_THEME, 38)
-            
+
             if is_panel_vertical:
                 vert_comp_size = 1
-                
+
             self.vert_comp_left = Box(name="vert-comp")
             self.vert_comp_left.set_size_request(vert_comp_size, 0)
             self.vert_comp_left.set_sensitive(False)
-            
-            self.vert_comp_right = Box(name="vert-comp") 
+
+            self.vert_comp_right = Box(name="vert-comp")
             self.vert_comp_right.set_size_request(vert_comp_size, 0)
             self.vert_comp_right.set_sensitive(False)
-            
+
             self.notch_children = [
                 self.vert_comp_left,
                 self.notch_complete,
@@ -473,15 +439,9 @@ class Notch(Window):
             self.hover_eventbox.set_visible(True)
             # Set minimum size to ensure hover detection area is always available
             self.hover_eventbox.set_size_request(260, 4)  # Width matches compact size, min height for hover
-            self.hover_eventbox.add_events(
-                Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
-            )
-            self.hover_eventbox.connect(
-                "enter-notify-event", self.on_notch_hover_area_enter
-            )
-            self.hover_eventbox.connect(
-                "leave-notify-event", self.on_notch_hover_area_leave
-            )
+            self.hover_eventbox.add_events(Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+            self.hover_eventbox.connect("enter-notify-event", self.on_notch_hover_area_enter)
+            self.hover_eventbox.connect("leave-notify-event", self.on_notch_hover_area_leave)
             self.add(self.hover_eventbox)
         else:
             self.add(self.notch_wrap)
@@ -492,9 +452,7 @@ class Notch(Window):
 
         self.add_keybinding("Escape", lambda *_: self.close_notch())
         self.add_keybinding("Ctrl Tab", lambda *_: self.dashboard.go_to_next_child())
-        self.add_keybinding(
-            "Ctrl Shift ISO_Left_Tab", lambda *_: self.dashboard.go_to_previous_child()
-        )
+        self.add_keybinding("Ctrl Shift ISO_Left_Tab", lambda *_: self.dashboard.go_to_previous_child())
 
         self.update_window_icon()
 
@@ -519,32 +477,66 @@ class Notch(Window):
 
         self.connect("key-press-event", self.on_key_press)
 
+    def _check_initial_player_state(self):
+        """
+        Check if a media player existed during initialization and switch to it if so.
+
+        This runs after UI initialization completes via GLib.idle_add to ensure:
+        1. All widgets are fully constructed
+        2. Player detection has completed
+        3. No race conditions with signal handlers
+
+        This handles the case where ax-shell is reloaded with a media player already
+        running. The player-appeared signal only fires for NEW players, so we need
+        to explicitly check for existing players after initialization.
+
+        Returns:
+            False: Prevents the idle callback from repeating
+        """
+        # Safety check: Only switch if we're still showing the default view
+        # This prevents overriding if user already interacted or another component
+        # changed the view (e.g., volume notification appeared)
+        current_child = self.compact_stack.get_visible_child()
+        if current_child != self.active_window_box:
+            return False
+
+        # Check if a player is actually active
+        if (
+            self.player_small
+            and self.player_small.mpris_player is not None
+            and self.player_small.mpris_label.get_label() != "Nothing Playing"
+        ):
+            # Switch to player view to show Cava visualizer
+            self.compact_stack.set_visible_child(self.player_small)
+
+        return False  # Don't repeat this callback
+
     # Audio-related methods
     def _connect_audio_signals(self, retry_count=0):
         max_retries = 5
-        
+
         try:
             if self.audio:
                 self.audio.connect("notify::speaker", self._on_speaker_changed)
                 self.audio.connect("notify::microphone", self._on_microphone_changed)
-                
+
                 if self.audio.speaker:
                     self.audio.speaker.connect("changed", self._on_speaker_changed_signal)
                     GLib.idle_add(self._update_volume_widgets_silently)
-                
+
                 if self.audio.microphone:
                     self.audio.microphone.connect("changed", self._on_microphone_changed_signal)
                     GLib.idle_add(self._update_mic_widgets_silently)
-                
+
                 GLib.timeout_add(500, self._enable_audio_display)
                 return False
-                    
+
         except Exception as e:
             print(f"Audio connection error (attempt {retry_count + 1}): {e}")
-        
+
         if retry_count < max_retries - 1:
             GLib.timeout_add(1000, lambda: self._connect_audio_signals(retry_count + 1))
-        
+
         return False
 
     def _on_speaker_changed(self, audio_service, speaker):
@@ -574,21 +566,21 @@ class Notch(Window):
     def _handle_speaker_change(self):
         if not self.audio or not self.audio.speaker:
             return
-            
+
         if self._suppress_first_audio_display:
             self._update_volume_widgets_silently()
             return
-            
+
         speaker = self.audio.speaker
         volume = speaker.volume
         is_muted = speaker.muted
-        
+
         volume_int = int(round(volume))
         volume_percentage = volume_int / 100.0
         self.volume_bar.set_fraction(volume_percentage)
-        
+
         self._update_volume_appearance(volume_int, is_muted)
-        
+
         if is_muted:
             self.volume_icon.set_from_icon_name("audio-volume-muted-symbolic", 16)
             self.volume_label.set_text("Muted")
@@ -602,38 +594,38 @@ class Notch(Window):
                 icon_name = "audio-volume-medium-symbolic"
             else:
                 icon_name = "audio-volume-high-symbolic"
-                
+
             self.volume_icon.set_from_icon_name(icon_name, 16)
             self.volume_label.set_text(f"{volume_int}%")
-        
+
         if not self._is_notch_open:
             self.show_volume_display()
 
     def _handle_microphone_change(self):
         if not self.audio or not self.audio.microphone:
             return
-            
+
         if self._suppress_first_audio_display:
             self._update_mic_widgets_silently()
             return
-            
+
         microphone = self.audio.microphone
         volume = microphone.volume
         is_muted = microphone.muted
-        
+
         volume_int = int(round(volume))
         volume_percentage = volume_int / 100.0
         self.mic_bar.set_fraction(volume_percentage)
-        
+
         self._update_mic_appearance(volume_int, is_muted)
-        
+
         if is_muted:
             self.mic_icon.set_from_icon_name("microphone-disabled-symbolic", 16)
             self.mic_label.set_text("Muted")
         else:
             self.mic_icon.set_from_icon_name("microphone-sensitivity-high-symbolic", 16)
             self.mic_label.set_text(f"{volume_int}%")
-        
+
         if not self._is_notch_open:
             self.show_mic_display()
 
@@ -645,12 +637,12 @@ class Notch(Window):
         volume_box_style = self.volume_box.get_style_context()
         volume_icon_style = self.volume_icon.get_style_context()
         volume_bar_style = self.volume_bar.get_style_context()
-        
+
         for cls in ["volume-muted", "volume-low", "volume-medium", "volume-high"]:
             volume_box_style.remove_class(cls)
             volume_icon_style.remove_class(cls)
             volume_bar_style.remove_class(cls)
-        
+
         if is_muted or volume_int == 0:
             volume_box_style.add_class("volume-muted")
             volume_icon_style.add_class("volume-muted")
@@ -672,12 +664,12 @@ class Notch(Window):
         mic_box_style = self.mic_box.get_style_context()
         mic_icon_style = self.mic_icon.get_style_context()
         mic_bar_style = self.mic_bar.get_style_context()
-        
+
         for cls in ["mic-muted", "mic-low", "mic-medium", "mic-high"]:
             mic_box_style.remove_class(cls)
             mic_icon_style.remove_class(cls)
             mic_bar_style.remove_class(cls)
-        
+
         if is_muted:
             mic_box_style.add_class("mic-muted")
             mic_icon_style.add_class("mic-muted")
@@ -698,17 +690,17 @@ class Notch(Window):
     def _update_volume_widgets_silently(self):
         if not self.audio or not self.audio.speaker:
             return
-            
+
         speaker = self.audio.speaker
         volume = speaker.volume
         is_muted = speaker.muted
-        
+
         volume_int = int(round(volume))
         volume_percentage = volume_int / 100.0
         self.volume_bar.set_fraction(volume_percentage)
-        
+
         self._update_volume_appearance(volume_int, is_muted)
-        
+
         if is_muted:
             self.volume_icon.set_from_icon_name("audio-volume-muted-symbolic", 16)
             self.volume_label.set_text("Muted")
@@ -722,24 +714,24 @@ class Notch(Window):
                 icon_name = "audio-volume-medium-symbolic"
             else:
                 icon_name = "audio-volume-high-symbolic"
-                
+
             self.volume_icon.set_from_icon_name(icon_name, 16)
             self.volume_label.set_text(f"{volume_int}%")
 
     def _update_mic_widgets_silently(self):
         if not self.audio or not self.audio.microphone:
             return
-            
+
         microphone = self.audio.microphone
         volume = microphone.volume
         is_muted = microphone.muted
-        
+
         volume_int = int(round(volume))
         volume_percentage = volume_int / 100.0
         self.mic_bar.set_fraction(volume_percentage)
-        
+
         self._update_mic_appearance(volume_int, is_muted)
-        
+
         if is_muted:
             self.mic_icon.set_from_icon_name("microphone-disabled-symbolic", 16)
             self.mic_label.set_text(" Muted")
@@ -750,37 +742,44 @@ class Notch(Window):
     def show_volume_display(self):
         if self._is_notch_open:
             return
-            
+
         if self._current_display_timeout_id:
             GLib.source_remove(self._current_display_timeout_id)
-        
+
+        # Remember what was showing before the volume notification
+        self._previous_compact_child = self.compact_stack.get_visible_child()
+
         self.compact_stack.set_visible_child(self.volume_box)
-        self._current_display_timeout_id = GLib.timeout_add(
-            self.VOLUME_DISPLAY_DURATION, 
-            self.return_to_normal_view
-        )
+        self._current_display_timeout_id = GLib.timeout_add(self.VOLUME_DISPLAY_DURATION, self.return_to_normal_view)
 
     def show_mic_display(self):
         if self._is_notch_open:
             return
-            
+
         if self._current_display_timeout_id:
             GLib.source_remove(self._current_display_timeout_id)
-        
+
+        # Remember what was showing before the mic notification
+        self._previous_compact_child = self.compact_stack.get_visible_child()
+
         self.compact_stack.set_visible_child(self.mic_box)
-        self._current_display_timeout_id = GLib.timeout_add(
-            self.VOLUME_DISPLAY_DURATION, 
-            self.return_to_normal_view
-        )
+        self._current_display_timeout_id = GLib.timeout_add(self.VOLUME_DISPLAY_DURATION, self.return_to_normal_view)
 
     def return_to_normal_view(self):
         self._current_display_timeout_id = None
-        
+
         if not self._is_notch_open:
             current_child = self.compact_stack.get_visible_child()
             if current_child in [self.volume_box, self.mic_box]:
-                self.compact_stack.set_visible_child(self.active_window_box)
-        
+                # Restore whatever was showing before the notification
+                if self._previous_compact_child is not None:
+                    self.compact_stack.set_visible_child(self._previous_compact_child)
+                else:
+                    # Fallback to active_window_box if we somehow don't have a previous state
+                    self.compact_stack.set_visible_child(self.active_window_box)
+
+                self._previous_compact_child = None
+
         return False
 
     def on_button_enter(self, widget, event):
@@ -824,7 +823,7 @@ class Notch(Window):
     def close_notch(self):
         if self.monitor_manager:
             self.monitor_manager.set_notch_state(self.monitor_id, False)
-            
+
         self.set_keyboard_mode("none")
         self.notch_box.remove_style_class("open")
         self.stack.remove_style_class("open")
@@ -847,28 +846,28 @@ class Notch(Window):
 
     def open_notch(self, widget_name: str):
         # Debug info for troubleshooting
-        if hasattr(self, '_debug_monitor_focus') and self._debug_monitor_focus:
+        if hasattr(self, "_debug_monitor_focus") and self._debug_monitor_focus:
             print(f"DEBUG: open_notch called on monitor {self.monitor_id} for widget '{widget_name}'")
-        
+
         # Handle monitor focus switching - always check real focused monitor from Hyprland
         if self.monitor_manager:
             # Get real focused monitor directly from Hyprland to ensure accuracy
             real_focused_monitor_id = self._get_real_focused_monitor_id()
-            
+
             # Update monitor manager if we got a valid result
             if real_focused_monitor_id is not None:
                 # Update the monitor manager's focused monitor
                 self.monitor_manager._focused_monitor_id = real_focused_monitor_id
-                if hasattr(self, '_debug_monitor_focus') and self._debug_monitor_focus:
+                if hasattr(self, "_debug_monitor_focus") and self._debug_monitor_focus:
                     print(f"DEBUG: Real focused monitor from Hyprland: {real_focused_monitor_id}")
-            
+
             focused_monitor_id = self.monitor_manager.get_focused_monitor_id()
-            focused_notch = self.monitor_manager.get_instance(focused_monitor_id, 'notch')
+            focused_notch = self.monitor_manager.get_instance(focused_monitor_id, "notch")
 
             # Close notches on other monitors
             self.monitor_manager.close_all_notches_except(focused_monitor_id)
 
-            if focused_notch and hasattr(focused_notch, 'open_notch'):
+            if focused_notch and hasattr(focused_notch, "open_notch"):
                 # Open notch on focused monitor
                 focused_notch._open_notch_internal(widget_name)
                 self.monitor_manager.set_notch_state(focused_monitor_id, True, widget_name)
@@ -880,6 +879,7 @@ class Notch(Window):
         GLib.Thread.new("get-focused-monitor", self._get_focused_monitor_thread, None)
         # Wait for result (not ideal, but for compatibility)
         import time
+
         start = time.time()
         while self._focused_monitor_result is None and time.time() - start < 2.0:
             time.sleep(0.01)
@@ -892,27 +892,21 @@ class Notch(Window):
 
             # Get focused monitor from Hyprland
             result = subprocess.run(
-                ["hyprctl", "monitors", "-j"],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=2.0
+                ["hyprctl", "monitors", "-j"], capture_output=True, text=True, check=True, timeout=2.0
             )
 
             monitors = json.loads(result.stdout)
             for i, monitor in enumerate(monitors):
-                if monitor.get('focused', False):
+                if monitor.get("focused", False):
                     self._focused_monitor_result = i
                     return
 
-        except (subprocess.CalledProcessError, json.JSONDecodeError,
-                FileNotFoundError, subprocess.TimeoutExpired) as e:
+        except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError, subprocess.TimeoutExpired) as e:
             print(f"Warning: Could not get focused monitor from Hyprland: {e}")
 
         self._focused_monitor_result = None
-    
+
     def _open_notch_internal(self, widget_name: str):
-        
         self.notch_revealer.set_reveal_child(True)
         self.notch_box.add_style_class("open")
         self.stack.add_style_class("open")
@@ -970,10 +964,7 @@ class Notch(Window):
         if widget_name in dashboard_sections_map:
             section_widget_instance = dashboard_sections_map[widget_name]
 
-            if (
-                is_dashboard_currently_visible
-                and self.dashboard.stack.get_visible_child() == section_widget_instance
-            ):
+            if is_dashboard_currently_visible and self.dashboard.stack.get_visible_child() == section_widget_instance:
                 self.close_notch()
                 return
 
@@ -1059,7 +1050,7 @@ class Notch(Window):
 
         if self.bar and not self.bar.get_visible() and data.BAR_POSITION == "Top":
             self.set_margin("0px 8px 8px 8px")
-        
+
         self._is_notch_open = True
 
     def toggle_hidden(self):
@@ -1162,9 +1153,7 @@ class Notch(Window):
 
                 active_window_json = conn.send_command("j/activewindow").reply.decode()
                 active_window_data = json.loads(active_window_json)
-                app_id = active_window_data.get(
-                    "initialClass", ""
-                ) or active_window_data.get("class", "")
+                app_id = active_window_data.get("initialClass", "") or active_window_data.get("class", "")
 
                 icon_size = 20
                 desktop_app = self.find_app(app_id)
@@ -1178,36 +1167,26 @@ class Notch(Window):
 
                 if not icon_pixbuf and "-" in app_id:
                     base_app_id = app_id.split("-")[0]
-                    icon_pixbuf = self.icon_resolver.get_icon_pixbuf(
-                        base_app_id, icon_size
-                    )
+                    icon_pixbuf = self.icon_resolver.get_icon_pixbuf(base_app_id, icon_size)
 
                 if icon_pixbuf:
                     self.window_icon.set_from_pixbuf(icon_pixbuf)
                 else:
                     try:
-                        self.window_icon.set_from_icon_name(
-                            "application-x-executable", 20
-                        )
+                        self.window_icon.set_from_icon_name("application-x-executable", 20)
                     except:
-                        self.window_icon.set_from_icon_name(
-                            "application-x-executable-symbolic", 20
-                        )
+                        self.window_icon.set_from_icon_name("application-x-executable-symbolic", 20)
             except Exception as e:
                 print(f"Error updating window icon: {e}")
                 try:
                     self.window_icon.set_from_icon_name("application-x-executable", 20)
                 except:
-                    self.window_icon.set_from_icon_name(
-                        "application-x-executable-symbolic", 20
-                    )
+                    self.window_icon.set_from_icon_name("application-x-executable-symbolic", 20)
         else:
             try:
                 self.window_icon.set_from_icon_name("application-x-executable", 20)
             except:
-                self.window_icon.set_from_icon_name(
-                    "application-x-executable-symbolic", 20
-                )
+                self.window_icon.set_from_icon_name("application-x-executable-symbolic", 20)
 
     def _check_occlusion(self):
         """
@@ -1226,7 +1205,7 @@ class Notch(Window):
             self.notch_revealer.set_reveal_child(not is_occluded)
 
         return True
-    
+
     def force_occlusion(self):
         """Force notch to occlusion mode (hidden)."""
         self._forced_occlusion = True
@@ -1235,10 +1214,11 @@ class Notch(Window):
         # Start occlusion check timer if in vertical mode (left/right)
         if data.BAR_POSITION in ["Left", "Right"]:
             GLib.timeout_add(100, self._check_occlusion)
-    
+
     def restore_from_occlusion(self):
         """Restore notch from occlusion mode."""
         import config.data as data
+
         self._forced_occlusion = False
         if data.PANEL_THEME == "Notch":
             if data.BAR_POSITION == "Top":
@@ -1257,9 +1237,7 @@ class Notch(Window):
 
                 active_window_json = conn.send_command("j/activewindow").reply.decode()
                 active_window_data = json.loads(active_window_json)
-                return active_window_data.get(
-                    "initialClass", ""
-                ) or active_window_data.get("class", "")
+                return active_window_data.get("initialClass", "") or active_window_data.get("class", "")
         except Exception as e:
             print(f"Error getting window class: {e}")
         return ""
@@ -1285,9 +1263,7 @@ class Notch(Window):
             self._prevent_occlusion = True
             self.notch_revealer.set_reveal_child(True)
 
-            self._occlusion_timer_id = GLib.timeout_add(
-                500, self._restore_occlusion_check
-            )
+            self._occlusion_timer_id = GLib.timeout_add(500, self._restore_occlusion_check)
 
     def _restore_occlusion_check(self):
         """Re-enable occlusion checking after temporary visibility"""
@@ -1350,9 +1326,7 @@ class Notch(Window):
         if self._launcher_transition_timeout:
             GLib.source_remove(self._launcher_transition_timeout)
 
-        self._launcher_transition_timeout = GLib.timeout_add(
-            150, self._finalize_launcher_transition
-        )
+        self._launcher_transition_timeout = GLib.timeout_add(150, self._finalize_launcher_transition)
 
         self.bar.revealer_right.set_reveal_child(True)
         self.bar.revealer_left.set_reveal_child(True)
@@ -1409,15 +1383,12 @@ class Notch(Window):
                 (keyval >= Gdk.KEY_a and keyval <= Gdk.KEY_z)
                 or (keyval >= Gdk.KEY_A and keyval <= Gdk.KEY_Z)
                 or (keyval >= Gdk.KEY_0 and keyval <= Gdk.KEY_9)
-                or keyval
-                in (Gdk.KEY_space, Gdk.KEY_underscore, Gdk.KEY_minus, Gdk.KEY_period)
+                or keyval in (Gdk.KEY_space, Gdk.KEY_underscore, Gdk.KEY_minus, Gdk.KEY_period)
             )
 
             if is_valid_char and keychar:
                 self._typed_chars_buffer += keychar
-                print(
-                    f"Buffered character: {keychar}, buffer now: '{self._typed_chars_buffer}'"
-                )
+                print(f"Buffered character: {keychar}, buffer now: '{self._typed_chars_buffer}'")
                 return True
 
         if (
@@ -1434,8 +1405,7 @@ class Notch(Window):
                 (keyval >= Gdk.KEY_a and keyval <= Gdk.KEY_z)
                 or (keyval >= Gdk.KEY_A and keyval <= Gdk.KEY_Z)
                 or (keyval >= Gdk.KEY_0 and keyval <= Gdk.KEY_9)
-                or keyval
-                in (Gdk.KEY_space, Gdk.KEY_underscore, Gdk.KEY_minus, Gdk.KEY_period)
+                or keyval in (Gdk.KEY_space, Gdk.KEY_underscore, Gdk.KEY_minus, Gdk.KEY_period)
             )
 
             if is_valid_char and keychar:
