@@ -1,5 +1,6 @@
 import json
 import os
+import weakref
 
 from fabric.hyprland.service import HyprlandEvent
 from fabric.hyprland.widgets import HyprlandLanguage as Language
@@ -58,41 +59,33 @@ class Bar(Window):
             monitor=monitor_id,
         )
 
-        self.anchor_var = ""
-        self.margin_var = ""
+        # Anchor configuration based on bar position
+        ANCHOR_CONFIGS = {
+            "Top": "left top right",
+            "Bottom": "left bottom right",
+            "Left": "left" if data.CENTERED_BAR else "left top bottom",
+            "Right": "right" if data.CENTERED_BAR else "top right bottom",
+        }
+        self.anchor_var = ANCHOR_CONFIGS.get(data.BAR_POSITION, "left top right")
 
-        match data.BAR_POSITION:
-            case "Top":
-                self.anchor_var = "left top right"
-            case "Bottom":
-                self.anchor_var = "left bottom right"
-            case "Left":
-                self.anchor_var = "left" if data.CENTERED_BAR else "left top bottom"
-            case "Right":
-                self.anchor_var = "right" if data.CENTERED_BAR else "top right bottom"
-            case _:
-                self.anchor_var = "left top right"
-
-        if data.VERTICAL:
-            match data.BAR_THEME:
-                case "Edge":
-                    self.margin_var = "-8px -8px -8px -8px"
-                case _:
-                    self.margin_var = "-4px -8px -4px -4px"
+        # Margin configuration based on orientation and theme
+        if data.BAR_THEME == "Edge":
+            self.margin_var = "-8px -8px -8px -8px"
+        elif data.VERTICAL:
+            self.margin_var = "-4px -8px -4px -4px"
+        elif data.BAR_POSITION == "Bottom":
+            self.margin_var = "-8px -4px -4px -4px"
         else:
-            match data.BAR_THEME:
-                case "Edge":
-                    self.margin_var = "-8px -8px -8px -8px"
-                case _:
-                    if data.BAR_POSITION == "Bottom":
-                        self.margin_var = "-8px -4px -4px -4px"
-                    else:
-                        self.margin_var = "-4px -4px -8px -4px"
+            self.margin_var = "-4px -4px -8px -4px"
 
         self.set_anchor(self.anchor_var)
         self.set_margin(self.margin_var)
 
-        self.notch = kwargs.get("notch", None)
+        # Use weak reference to avoid circular reference with notch
+        self._notch_ref = None
+        notch_arg = kwargs.get("notch", None)
+        if notch_arg is not None:
+            self._notch_ref = weakref.ref(notch_arg)
         self.component_visibility = data.BAR_COMPONENTS_VISIBILITY
 
         self.dock_instance = None
@@ -246,6 +239,24 @@ class Bar(Window):
         self.control = ControlSmall()
         self.metrics = MetricsSmall()
         self.battery = Battery()
+
+        # Component map for visibility management - defined once and reused
+        self._component_map = {
+            "button_apps": self.button_apps,
+            "systray": self.systray,
+            "control": self.control,
+            "network": self.network,
+            "button_tools": self.button_tools,
+            "button_overview": self.button_overview,
+            "ws_container": self.ws_container,
+            "weather": self.weather,
+            "battery": self.battery,
+            "metrics": self.metrics,
+            "language": self.language,
+            "date_time": self.date_time,
+            "button_power": self.button_power,
+            "sysprofiles": self.sysprofiles,
+        }
 
         self.apply_component_props()
 
@@ -444,19 +455,12 @@ class Bar(Window):
         for tc in theme_classes:
             self.bar_inner.remove_style_class(tc)
 
-        self.style = None
-        match current_theme:
-            case "Pills":
-                self.style = "pills"
-            case "Dense":
-                self.style = "dense"
-            case "Edge":
-                if data.VERTICAL and data.CENTERED_BAR:
-                    self.style = "edgecenter"
-                else:
-                    self.style = "edge"
-            case _:
-                self.style = "pills"
+        # Theme to style class mapping
+        THEME_STYLES = {"Pills": "pills", "Dense": "dense", "Edge": "edge"}
+        if current_theme == "Edge" and data.VERTICAL and data.CENTERED_BAR:
+            self.style = "edgecenter"
+        else:
+            self.style = THEME_STYLES.get(current_theme, "pills")
 
         self.bar_inner.add_style_class(self.style)
 
@@ -471,22 +475,14 @@ class Bar(Window):
                     )
             self.integrated_dock_widget.add_style_class(self.style)
 
-        if data.BAR_THEME == "Dense" or data.BAR_THEME == "Edge":
+        if data.BAR_THEME in ["Dense", "Edge"]:
             for child in self.themed_children:
                 if hasattr(child, "add_style_class"):
                     child.add_style_class("invert")
 
-        match data.BAR_POSITION:
-            case "Top":
-                self.bar_inner.add_style_class("top")
-            case "Bottom":
-                self.bar_inner.add_style_class("bottom")
-            case "Left":
-                self.bar_inner.add_style_class("left")
-            case "Right":
-                self.bar_inner.add_style_class("right")
-            case _:
-                self.bar_inner.add_style_class("top")
+        # Position style class
+        position_class = data.BAR_POSITION.lower() if data.BAR_POSITION in ["Top", "Bottom", "Left", "Right"] else "top"
+        self.bar_inner.add_style_class(position_class)
 
         if data.VERTICAL:
             self.bar_inner.add_style_class("vertical")
@@ -495,50 +491,16 @@ class Bar(Window):
         self.chinese_numbers()
 
     def apply_component_props(self):
-        components = {
-            "button_apps": self.button_apps,
-            "systray": self.systray,
-            "control": self.control,
-            "network": self.network,
-            "button_tools": self.button_tools,
-            "button_overview": self.button_overview,
-            "ws_container": self.ws_container,
-            "weather": self.weather,
-            "battery": self.battery,
-            "metrics": self.metrics,
-            "language": self.language,
-            "date_time": self.date_time,
-            "button_power": self.button_power,
-            "sysprofiles": self.sysprofiles,
-        }
-
-        for component_name, widget in components.items():
+        for component_name, widget in self._component_map.items():
             if component_name in self.component_visibility:
                 widget.set_visible(self.component_visibility[component_name])
 
     def toggle_component_visibility(self, component_name):
-        components = {
-            "button_apps": self.button_apps,
-            "systray": self.systray,
-            "control": self.control,
-            "network": self.network,
-            "button_tools": self.button_tools,
-            "button_overview": self.button_overview,
-            "ws_container": self.ws_container,
-            "weather": self.weather,
-            "battery": self.battery,
-            "metrics": self.metrics,
-            "language": self.language,
-            "date_time": self.date_time,
-            "button_power": self.button_power,
-            "sysprofiles": self.sysprofiles,
-        }
-
-        if component_name in components and component_name in self.component_visibility:
+        if component_name in self._component_map and component_name in self.component_visibility:
             self.component_visibility[component_name] = not self.component_visibility[
                 component_name
             ]
-            components[component_name].set_visible(
+            self._component_map[component_name].set_visible(
                 self.component_visibility[component_name]
             )
 
@@ -575,6 +537,16 @@ class Bar(Window):
 
     def on_button_clicked(self, *args):
         exec_shell_command_async("notify-send 'Botón presionado' '¡Funciona!'")
+
+    @property
+    def notch(self):
+        """Access notch via weak reference to avoid circular dependency."""
+        return self._notch_ref() if self._notch_ref else None
+
+    @notch.setter
+    def notch(self, value):
+        """Set notch using weak reference."""
+        self._notch_ref = weakref.ref(value) if value is not None else None
 
     def search_apps(self):
         if self.notch:

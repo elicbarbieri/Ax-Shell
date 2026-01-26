@@ -25,33 +25,33 @@ CURRENT_HEIGHT = screen.get_height()
 CONFIG_FILE = get_relative_path("../config/config.json")
 MATUGEN_STATE_FILE = os.path.join(CONFIG_DIR, "matugen_state")
 
-
-def load_config():
-    """Load the configuration from config.json"""
-    config_path = os.path.expanduser(f"~/.config/{APP_NAME_CAP}/config/config.json")
-    config = {}
-
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r") as f:
-                config = json.load(f)
-        except Exception as e:
-            print(f"Error loading config: {e}")
-
-    return config
-
-
 # Import defaults from settings_constants to avoid duplication
 from .settings_constants import DEFAULTS
 
-# Load configuration once and use throughout the module
-config = {}
-if os.path.exists(CONFIG_FILE):
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-    except Exception as e:
-        print(f"Error loading config file: {e}")
+
+def load_config():
+    """
+    Load fresh configuration from config.json.
+
+    Use this function when you need to read the current config values
+    at runtime (e.g., for dynamic settings that may change).
+    For static module-level values, use the pre-loaded config variables instead.
+
+    Returns:
+        dict: Configuration dictionary, empty if file doesn't exist or on error.
+    """
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading config: {e}")
+    return {}
+
+
+# Module-level config snapshot - loaded once at import time for efficiency.
+# These values won't change during runtime; use load_config() for fresh reads.
+_config = load_config()
 
 
 def get_default(setting_str: str):
@@ -59,7 +59,7 @@ def get_default(setting_str: str):
 
 
 def _get_config_var(setting_str: str):
-    return config.get(setting_str, get_default(setting_str))
+    return _config.get(setting_str, get_default(setting_str))
 
 
 # Set configuration values using defaults from settings_constants

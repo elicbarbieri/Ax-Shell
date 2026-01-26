@@ -1,3 +1,8 @@
+import json
+import subprocess
+import time
+import weakref
+
 from fabric.hyprland.widgets import HyprlandActiveWindow as ActiveWindow
 from fabric.utils.helpers import FormattedString, get_desktop_applications
 from fabric.widgets.box import Box
@@ -20,6 +25,7 @@ from modules.player import PlayerSmall
 from modules.power import PowerMenu
 from modules.tmux import TmuxManager
 from modules.tools import Toolbox
+from utils.app_helpers import build_app_identifiers_map, find_app_by_identifier
 from utils.icon_resolver import IconResolver
 from utils.occlusion import check_occlusion
 from widgets.wayland import WaylandWindow as Window
@@ -41,71 +47,45 @@ class Notch(Window):
         if data.PANEL_THEME == "Panel":
             is_panel_vertical = data.VERTICAL
 
+        # Anchor and transition configs: (BAR_POSITION, PANEL_POSITION) -> (anchor, transition)
+        PANEL_ANCHOR_CONFIGS = {
+            # Vertical panels (Left bar)
+            ("Left", "Start"): ("left top", "slide-right"),
+            ("Left", "Center"): ("left", "slide-right"),
+            ("Left", "End"): ("left bottom", "slide-right"),
+            # Vertical panels (Right bar)
+            ("Right", "Start"): ("right top", "slide-left"),
+            ("Right", "Center"): ("right", "slide-left"),
+            ("Right", "End"): ("right bottom", "slide-left"),
+            # Horizontal panels (Top bar)
+            ("Top", "Start"): ("top left", "slide-down"),
+            ("Top", "Center"): ("top", "slide-down"),
+            ("Top", "End"): ("top right", "slide-down"),
+            # Horizontal panels (Bottom bar)
+            ("Bottom", "Start"): ("bottom left", "slide-up"),
+            ("Bottom", "Center"): ("bottom", "slide-up"),
+            ("Bottom", "End"): ("bottom right", "slide-up"),
+        }
+
+        # Default values
         anchor_val = "top"
         revealer_transition_type = "slide-down"
 
-        if data.PANEL_THEME == "Notch":
-            anchor_val = "top"
-            revealer_transition_type = "slide-down"
-        elif data.PANEL_THEME == "Panel":
-            if is_panel_vertical:
-                if data.BAR_POSITION == "Left":
-                    match data.PANEL_POSITION:
-                        case "Start":
-                            anchor_val = "left top"
-                            revealer_transition_type = "slide-right"
-                        case "Center":
-                            anchor_val = "left"
-                            revealer_transition_type = "slide-right"
-                        case "End":
-                            anchor_val = "left bottom"
-                            revealer_transition_type = "slide-right"
-                        case _:
-                            anchor_val = "left"
-                            revealer_transition_type = "slide-right"
-                elif data.BAR_POSITION == "Right":
-                    match data.PANEL_POSITION:
-                        case "Start":
-                            anchor_val = "right top"
-                            revealer_transition_type = "slide-left"
-                        case "Center":
-                            anchor_val = "right"
-                            revealer_transition_type = "slide-left"
-                        case "End":
-                            anchor_val = "right bottom"
-                            revealer_transition_type = "slide-left"
-                        case _:
-                            anchor_val = "right"
-                            revealer_transition_type = "slide-left"
+        if data.PANEL_THEME == "Panel":
+            key = (data.BAR_POSITION, data.PANEL_POSITION)
+            if key in PANEL_ANCHOR_CONFIGS:
+                anchor_val, revealer_transition_type = PANEL_ANCHOR_CONFIGS[key]
             else:
-                if data.BAR_POSITION == "Top":
-                    match data.PANEL_POSITION:
-                        case "Start":
-                            anchor_val = "top left"
-                            revealer_transition_type = "slide-down"
-                        case "Center":
-                            anchor_val = "top"
-                            revealer_transition_type = "slide-down"
-                        case "End":
-                            anchor_val = "top right"
-                            revealer_transition_type = "slide-down"
-                        case _:
-                            anchor_val = "top"
-                            revealer_transition_type = "slide-down"
-                elif data.BAR_POSITION == "Bottom":
-                    match data.PANEL_POSITION:
-                        case "Start":
-                            anchor_val = "bottom left"
-                            revealer_transition_type = "slide-up"
-                        case "Center":
-                            anchor_val = "bottom"
-                            revealer_transition_type = "slide-up"
-                        case "End":
-                            anchor_val = "bottom right"
-                            revealer_transition_type = "slide-up"
-                        case _:
-                            anchor_val = "bottom"
-                            revealer_transition_type = "slide-up"
+                # Fallback defaults based on bar position
+                fallbacks = {
+                    "Left": ("left", "slide-right"),
+                    "Right": ("right", "slide-left"),
+                    "Top": ("top", "slide-down"),
+                    "Bottom": ("bottom", "slide-up"),
+                }
+                anchor_val, revealer_transition_type = fallbacks.get(
+                    data.BAR_POSITION, ("top", "slide-down")
+                )
 
         default_top_anchor_margin_str = "-40px 8px 8px 8px"
         pills_margin_top_str = "-40px 0px 0px 0px"
@@ -151,7 +131,11 @@ class Notch(Window):
         self._launcher_transitioning = False
         self._launcher_transition_timeout = None
 
-        self.bar = kwargs.get("bar", None)
+        # Use weak reference to avoid circular reference with bar
+        self._bar_ref = None
+        bar_arg = kwargs.get("bar", None)
+        if bar_arg is not None:
+            self._bar_ref = weakref.ref(bar_arg)
         self.is_hovered = False
         self.connect("realize", self._on_realize)
         self._prevent_occlusion = False
@@ -160,7 +144,7 @@ class Notch(Window):
 
         self.icon_resolver = IconResolver()
         self._all_apps = get_desktop_applications()
-        self.app_identifiers = self._build_app_identifiers_map()
+        self.app_identifiers = build_app_identifiers_map(self._all_apps)
 
         self.dashboard = Dashboard(notch=self)
         self.nhistory = self.dashboard.widgets.notification_history
@@ -543,7 +527,7 @@ class Notch(Window):
         if self.audio.speaker:
             try:
                 self.audio.speaker.disconnect_by_func(self._on_speaker_changed_signal)
-            except:
+            except Exception:
                 pass
             self.audio.speaker.connect("changed", self._on_speaker_changed_signal)
             self._update_volume_widgets_silently()
@@ -552,7 +536,7 @@ class Notch(Window):
         if self.audio.microphone:
             try:
                 self.audio.microphone.disconnect_by_func(self._on_microphone_changed_signal)
-            except:
+            except Exception:
                 pass
             self.audio.microphone.connect("changed", self._on_microphone_changed_signal)
             self._update_mic_widgets_silently()
@@ -563,175 +547,109 @@ class Notch(Window):
     def _on_microphone_changed_signal(self, microphone, *args):
         self._handle_microphone_change()
 
+    def _get_volume_icon_name(self, volume_int, is_muted, is_speaker=True):
+        """Get the appropriate icon name for volume level."""
+        if is_speaker:
+            if is_muted or volume_int == 0:
+                return "audio-volume-muted-symbolic"
+            elif volume_int <= 33:
+                return "audio-volume-low-symbolic"
+            elif volume_int <= 66:
+                return "audio-volume-medium-symbolic"
+            else:
+                return "audio-volume-high-symbolic"
+        else:
+            if is_muted:
+                return "microphone-disabled-symbolic"
+            else:
+                return "microphone-sensitivity-high-symbolic"
+
+    def _update_audio_appearance(self, volume_int, is_muted, widgets, class_prefix):
+        """Update style classes for audio widgets."""
+        style_contexts = [w.get_style_context() for w in widgets]
+        level_classes = [f"{class_prefix}-muted", f"{class_prefix}-low",
+                        f"{class_prefix}-medium", f"{class_prefix}-high"]
+
+        # Remove all level classes
+        for ctx in style_contexts:
+            for cls in level_classes:
+                ctx.remove_class(cls)
+
+        # Determine which class to add
+        if is_muted or (class_prefix == "volume" and volume_int == 0):
+            new_class = f"{class_prefix}-muted"
+        elif volume_int <= 33:
+            new_class = f"{class_prefix}-low"
+        elif volume_int <= 66:
+            new_class = f"{class_prefix}-medium"
+        else:
+            new_class = f"{class_prefix}-high"
+
+        # Add the new class to all widgets
+        for ctx in style_contexts:
+            ctx.add_class(new_class)
+
+    def _update_audio_widgets(self, device, icon_widget, label_widget, bar_widget, is_speaker=True):
+        """Update audio display widgets for speaker or microphone."""
+        volume = device.volume
+        is_muted = device.muted
+        volume_int = int(round(volume))
+        volume_percentage = volume_int / 100.0
+
+        bar_widget.set_fraction(volume_percentage)
+
+        # Update appearance classes
+        class_prefix = "volume" if is_speaker else "mic"
+        box_widget = self.volume_box if is_speaker else self.mic_box
+        self._update_audio_appearance(volume_int, is_muted, [box_widget, icon_widget, bar_widget], class_prefix)
+
+        # Update icon
+        icon_name = self._get_volume_icon_name(volume_int, is_muted, is_speaker)
+        icon_widget.set_from_icon_name(icon_name, 16)
+
+        # Update label
+        if is_muted or (is_speaker and volume_int == 0):
+            label_widget.set_text(" Muted" if not is_speaker else "Muted")
+        else:
+            label_widget.set_text(f" {volume_int}%" if not is_speaker else f"{volume_int}%")
+
     def _handle_speaker_change(self):
         if not self.audio or not self.audio.speaker:
             return
-
         if self._suppress_first_audio_display:
             self._update_volume_widgets_silently()
             return
-
-        speaker = self.audio.speaker
-        volume = speaker.volume
-        is_muted = speaker.muted
-
-        volume_int = int(round(volume))
-        volume_percentage = volume_int / 100.0
-        self.volume_bar.set_fraction(volume_percentage)
-
-        self._update_volume_appearance(volume_int, is_muted)
-
-        if is_muted:
-            self.volume_icon.set_from_icon_name("audio-volume-muted-symbolic", 16)
-            self.volume_label.set_text("Muted")
-        elif volume_int == 0:
-            self.volume_icon.set_from_icon_name("audio-volume-muted-symbolic", 16)
-            self.volume_label.set_text("Muted")
-        else:
-            if volume_int <= 33:
-                icon_name = "audio-volume-low-symbolic"
-            elif volume_int <= 66:
-                icon_name = "audio-volume-medium-symbolic"
-            else:
-                icon_name = "audio-volume-high-symbolic"
-
-            self.volume_icon.set_from_icon_name(icon_name, 16)
-            self.volume_label.set_text(f"{volume_int}%")
+        self._update_audio_widgets(
+            self.audio.speaker, self.volume_icon, self.volume_label, self.volume_bar, is_speaker=True
+        )
 
     def _handle_microphone_change(self):
         if not self.audio or not self.audio.microphone:
             return
-
         if self._suppress_first_audio_display:
             self._update_mic_widgets_silently()
             return
-
-        microphone = self.audio.microphone
-        volume = microphone.volume
-        is_muted = microphone.muted
-
-        volume_int = int(round(volume))
-        volume_percentage = volume_int / 100.0
-        self.mic_bar.set_fraction(volume_percentage)
-
-        self._update_mic_appearance(volume_int, is_muted)
-
-        if is_muted:
-            self.mic_icon.set_from_icon_name("microphone-disabled-symbolic", 16)
-            self.mic_label.set_text("Muted")
-        else:
-            self.mic_icon.set_from_icon_name("microphone-sensitivity-high-symbolic", 16)
-            self.mic_label.set_text(f"{volume_int}%")
+        self._update_audio_widgets(
+            self.audio.microphone, self.mic_icon, self.mic_label, self.mic_bar, is_speaker=False
+        )
 
     def _enable_audio_display(self):
         self._suppress_first_audio_display = False
         return False
 
-    def _update_volume_appearance(self, volume_int, is_muted):
-        volume_box_style = self.volume_box.get_style_context()
-        volume_icon_style = self.volume_icon.get_style_context()
-        volume_bar_style = self.volume_bar.get_style_context()
-
-        for cls in ["volume-muted", "volume-low", "volume-medium", "volume-high"]:
-            volume_box_style.remove_class(cls)
-            volume_icon_style.remove_class(cls)
-            volume_bar_style.remove_class(cls)
-
-        if is_muted or volume_int == 0:
-            volume_box_style.add_class("volume-muted")
-            volume_icon_style.add_class("volume-muted")
-            volume_bar_style.add_class("volume-muted")
-        elif volume_int <= 33:
-            volume_box_style.add_class("volume-low")
-            volume_icon_style.add_class("volume-low")
-            volume_bar_style.add_class("volume-low")
-        elif volume_int <= 66:
-            volume_box_style.add_class("volume-medium")
-            volume_icon_style.add_class("volume-medium")
-            volume_bar_style.add_class("volume-medium")
-        else:
-            volume_box_style.add_class("volume-high")
-            volume_icon_style.add_class("volume-high")
-            volume_bar_style.add_class("volume-high")
-
-    def _update_mic_appearance(self, volume_int, is_muted):
-        mic_box_style = self.mic_box.get_style_context()
-        mic_icon_style = self.mic_icon.get_style_context()
-        mic_bar_style = self.mic_bar.get_style_context()
-
-        for cls in ["mic-muted", "mic-low", "mic-medium", "mic-high"]:
-            mic_box_style.remove_class(cls)
-            mic_icon_style.remove_class(cls)
-            mic_bar_style.remove_class(cls)
-
-        if is_muted:
-            mic_box_style.add_class("mic-muted")
-            mic_icon_style.add_class("mic-muted")
-            mic_bar_style.add_class("mic-muted")
-        elif volume_int <= 33:
-            mic_box_style.add_class("mic-low")
-            mic_icon_style.add_class("mic-low")
-            mic_bar_style.add_class("mic-low")
-        elif volume_int <= 66:
-            mic_box_style.add_class("mic-medium")
-            mic_icon_style.add_class("mic-medium")
-            mic_bar_style.add_class("mic-medium")
-        else:
-            mic_box_style.add_class("mic-high")
-            mic_icon_style.add_class("mic-high")
-            mic_bar_style.add_class("mic-high")
-
     def _update_volume_widgets_silently(self):
         if not self.audio or not self.audio.speaker:
             return
-
-        speaker = self.audio.speaker
-        volume = speaker.volume
-        is_muted = speaker.muted
-
-        volume_int = int(round(volume))
-        volume_percentage = volume_int / 100.0
-        self.volume_bar.set_fraction(volume_percentage)
-
-        self._update_volume_appearance(volume_int, is_muted)
-
-        if is_muted:
-            self.volume_icon.set_from_icon_name("audio-volume-muted-symbolic", 16)
-            self.volume_label.set_text("Muted")
-        elif volume_int == 0:
-            self.volume_icon.set_from_icon_name("audio-volume-muted-symbolic", 16)
-            self.volume_label.set_text("Muted")
-        else:
-            if volume_int <= 33:
-                icon_name = "audio-volume-low-symbolic"
-            elif volume_int <= 66:
-                icon_name = "audio-volume-medium-symbolic"
-            else:
-                icon_name = "audio-volume-high-symbolic"
-
-            self.volume_icon.set_from_icon_name(icon_name, 16)
-            self.volume_label.set_text(f"{volume_int}%")
+        self._update_audio_widgets(
+            self.audio.speaker, self.volume_icon, self.volume_label, self.volume_bar, is_speaker=True
+        )
 
     def _update_mic_widgets_silently(self):
         if not self.audio or not self.audio.microphone:
             return
-
-        microphone = self.audio.microphone
-        volume = microphone.volume
-        is_muted = microphone.muted
-
-        volume_int = int(round(volume))
-        volume_percentage = volume_int / 100.0
-        self.mic_bar.set_fraction(volume_percentage)
-
-        self._update_mic_appearance(volume_int, is_muted)
-
-        if is_muted:
-            self.mic_icon.set_from_icon_name("microphone-disabled-symbolic", 16)
-            self.mic_label.set_text(" Muted")
-        else:
-            self.mic_icon.set_from_icon_name("microphone-sensitivity-high-symbolic", 16)
-            self.mic_label.set_text(f" {volume_int}%")
+        self._update_audio_widgets(
+            self.audio.microphone, self.mic_icon, self.mic_label, self.mic_bar, is_speaker=False
+        )
 
     def on_button_enter(self, widget, event):
         self.is_hovered = True
@@ -770,6 +688,16 @@ class Notch(Window):
         self.is_hovered = False
 
         return False
+
+    @property
+    def bar(self):
+        """Access bar via weak reference to avoid circular dependency."""
+        return self._bar_ref() if self._bar_ref else None
+
+    @bar.setter
+    def bar(self, value):
+        """Set bar using weak reference."""
+        self._bar_ref = weakref.ref(value) if value is not None else None
 
     def close_notch(self):
         if self.monitor_manager:
@@ -829,8 +757,6 @@ class Notch(Window):
         self._focused_monitor_result = None
         GLib.Thread.new("get-focused-monitor", self._get_focused_monitor_thread, None)
         # Wait for result (not ideal, but for compatibility)
-        import time
-
         start = time.time()
         while self._focused_monitor_result is None and time.time() - start < 2.0:
             time.sleep(0.01)
@@ -838,9 +764,6 @@ class Notch(Window):
 
     def _get_focused_monitor_thread(self, user_data):
         try:
-            import json
-            import subprocess
-
             # Get focused monitor from Hyprland
             result = subprocess.run(
                 ["hyprctl", "monitors", "-j"], capture_output=True, text=True, check=True, timeout=2.0
@@ -1053,33 +976,9 @@ class Notch(Window):
 
             self.update_window_icon()
 
-    def _build_app_identifiers_map(self):
-        """Build a mapping of app identifiers (class names, executables, names) to DesktopApp objects"""
-        identifiers = {}
-        for app in self._all_apps:
-            if app.name:
-                identifiers[app.name.lower()] = app
-
-            if app.display_name:
-                identifiers[app.display_name.lower()] = app
-
-            if app.window_class:
-                identifiers[app.window_class.lower()] = app
-
-            if app.executable:
-                exe_basename = app.executable.split("/")[-1].lower()
-                identifiers[exe_basename] = app
-
-            if app.command_line:
-                cmd_base = app.command_line.split()[0].split("/")[-1].lower()
-                identifiers[cmd_base] = app
-
-        return identifiers
-
     def find_app(self, app_id: str):
         """Find a DesktopApp object by various identifiers using the pre-built map."""
-        normalized_id = app_id.lower()
-        return self.app_identifiers.get(normalized_id)
+        return find_app_by_identifier(app_id, self.app_identifiers, self._all_apps)
 
     def update_window_icon(self, *args):
         """Update the window icon based on the current active window title"""
@@ -1100,8 +999,6 @@ class Notch(Window):
         conn = get_hyprland_connection()
         if conn:
             try:
-                import json
-
                 active_window_json = conn.send_command("j/activewindow").reply.decode()
                 active_window_data = json.loads(active_window_json)
                 app_id = active_window_data.get("initialClass", "") or active_window_data.get("class", "")
@@ -1125,18 +1022,18 @@ class Notch(Window):
                 else:
                     try:
                         self.window_icon.set_from_icon_name("application-x-executable", 20)
-                    except:
+                    except Exception:
                         self.window_icon.set_from_icon_name("application-x-executable-symbolic", 20)
             except Exception as e:
                 print(f"Error updating window icon: {e}")
                 try:
                     self.window_icon.set_from_icon_name("application-x-executable", 20)
-                except:
+                except Exception:
                     self.window_icon.set_from_icon_name("application-x-executable-symbolic", 20)
         else:
             try:
                 self.window_icon.set_from_icon_name("application-x-executable", 20)
-            except:
+            except Exception:
                 self.window_icon.set_from_icon_name("application-x-executable-symbolic", 20)
 
     def _check_occlusion(self):
@@ -1168,8 +1065,6 @@ class Notch(Window):
 
     def restore_from_occlusion(self):
         """Restore notch from occlusion mode."""
-        import config.data as data
-
         self._forced_occlusion = False
         if data.PANEL_THEME == "Notch":
             if data.BAR_POSITION == "Top":
@@ -1184,8 +1079,6 @@ class Notch(Window):
 
             conn = get_hyprland_connection()
             if conn:
-                import json
-
                 active_window_json = conn.send_command("j/activewindow").reply.decode()
                 active_window_data = json.loads(active_window_json)
                 return active_window_data.get("initialClass", "") or active_window_data.get("class", "")

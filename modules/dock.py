@@ -15,6 +15,12 @@ from gi.repository import Gdk, GLib, Gtk
 
 import config.data as data
 from modules.corners import MyCorner
+from utils.app_helpers import (
+    build_app_identifiers_map,
+    normalize_window_class,
+    classes_match,
+    find_app_by_identifier,
+)
 from utils.icon_resolver import IconResolver
 from widgets.wayland import WaylandWindow as Window
 
@@ -130,17 +136,13 @@ class Dock(Window):
             main_box_h_align_val = "center"
 
         if not self.integrated_mode:
-            match data.BAR_POSITION:
-                case "Top":
-                    self.set_margin("-8px 0px 0px 0px")
-                case "Bottom":
-                    self.set_margin("0px 0px 0px 0px")
-                case "Left":
-                    self.set_margin("0px 0px 0px -8px")
-                case "Right":
-                    self.set_margin("0px -8px 0px 0px")
-                case _:
-                    self.set_margin("0px 0px 0px 0px")
+            DOCK_MARGINS = {
+                "Top": "-8px 0px 0px 0px",
+                "Bottom": "0px 0px 0px 0px",
+                "Left": "0px 0px 0px -8px",
+                "Right": "0px -8px 0px 0px",
+            }
+            self.set_margin(DOCK_MARGINS.get(data.BAR_POSITION, "0px 0px 0px 0px"))
 
         self.config = read_config()
         self.conn = get_hyprland_connection()
@@ -149,7 +151,7 @@ class Dock(Window):
         self.config_path = get_relative_path("../config/dock.json")
         self.app_map = {}
         self._all_apps = get_desktop_applications()
-        self.app_identifiers = self._build_app_identifiers_map()
+        self.app_identifiers = build_app_identifiers_map(self._all_apps)
         
         self.hide_id = None
         self._arranger_handler = None
@@ -173,15 +175,8 @@ class Dock(Window):
             else:
                 self.wrapper.remove_style_class("vertical") 
 
-            match data.DOCK_THEME:
-                case "Pills":
-                    self.wrapper.add_style_class("pills")
-                case "Dense":
-                    self.wrapper.add_style_class("dense")
-                case "Edge":
-                    self.wrapper.add_style_class("edge")
-                case _:
-                    self.wrapper.add_style_class("pills")
+            DOCK_THEME_CLASSES = {"Pills": "pills", "Dense": "dense", "Edge": "edge"}
+            self.wrapper.add_style_class(DOCK_THEME_CLASSES.get(data.DOCK_THEME, "pills"))
 
         if not self.integrated_mode:
             self.dock_eventbox = EventBox()
@@ -300,31 +295,6 @@ class Dock(Window):
             self.conn.connect("event::workspace", self.check_hide)
         
         GLib.timeout_add_seconds(2, self.check_config_change)
-            
-    def _build_app_identifiers_map(self):
-        identifiers = {}
-        for app in self._all_apps:
-            if app.name: identifiers[app.name.lower()] = app
-            if app.display_name: identifiers[app.display_name.lower()] = app
-            if app.window_class: identifiers[app.window_class.lower()] = app
-            if app.executable: identifiers[app.executable.split('/')[-1].lower()] = app
-            if app.command_line: identifiers[app.command_line.split()[0].split('/')[-1].lower()] = app
-        return identifiers
-
-    def _normalize_window_class(self, class_name):
-        if not class_name: return ""
-        normalized = class_name.lower()
-        suffixes = [".bin", ".exe", ".so", "-bin", "-gtk"]
-        for suffix in suffixes:
-            if normalized.endswith(suffix):
-                normalized = normalized[:-len(suffix)]
-        return normalized
-        
-    def _classes_match(self, class1, class2):
-        if not class1 or not class2: return False
-        norm1 = self._normalize_window_class(class1)
-        norm2 = self._normalize_window_class(class2)
-        return norm1 == norm2
 
     def on_drag_begin(self, widget, drag_context):
         self._drag_in_progress = True
@@ -401,7 +371,7 @@ class Dock(Window):
     def update_app_map(self):
         self._all_apps = get_desktop_applications()
         self.app_map = {app.name: app for app in self._all_apps if app.name}
-        self.app_identifiers = self._build_app_identifiers_map()
+        self.app_identifiers = build_app_identifiers_map(self._all_apps)
 
     def create_button(self, app_identifier, instances):
         desktop_app = self.find_app(app_identifier)
@@ -535,7 +505,7 @@ class Dock(Window):
                 else: window_id = title
             if not window_id: window_id = "unknown-app"
             running_windows.setdefault(window_id, []).append(c)
-            normalized_id = self._normalize_window_class(window_id)
+            normalized_id = normalize_window_class(window_id)
             if normalized_id != window_id:
                 running_windows.setdefault(normalized_id, []).extend(running_windows[window_id])
         
@@ -567,7 +537,7 @@ class Dock(Window):
             for identifier in possible_identifiers:
                 if identifier in running_windows:
                     instances = running_windows[identifier]; matched_class = identifier; break
-                normalized = self._normalize_window_class(identifier)
+                normalized = normalize_window_class(identifier)
                 if normalized in running_windows:
                     instances = running_windows[normalized]; matched_class = normalized; break
                 for window_class_key in running_windows: 
@@ -578,7 +548,7 @@ class Dock(Window):
             
             if matched_class:
                 used_window_classes.add(matched_class)
-                used_window_classes.add(self._normalize_window_class(matched_class))
+                used_window_classes.add(normalize_window_class(matched_class))
             
             pinned_buttons.append(self.create_button(app_data_item, instances))
         
@@ -588,7 +558,7 @@ class Dock(Window):
                 app = None
                 app = self.app_identifiers.get(class_name)
                 if not app:
-                    norm_class = self._normalize_window_class(class_name)
+                    norm_class = normalize_window_class(class_name)
                     app = self.app_identifiers.get(norm_class)
                 if not app: app = self.find_app_by_key(class_name)
                 if not app and instances and instances[0].get("title"):
