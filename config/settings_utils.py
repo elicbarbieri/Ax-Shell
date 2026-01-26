@@ -242,22 +242,33 @@ def generate_hyprconf() -> str:
     """
     Generate the Hypr configuration string using the current bind_vars.
     """
+    from .platform import get_asset_path, is_nixos
+
     home = os.path.expanduser("~")
+    ax_icon_path = get_asset_path("assets/ax.png")
     # Determine animation type based on bar position
     bar_position = get_bind_var("bar_position")
     is_vertical = bar_position in ["Left", "Right"]
     animation_type = "slidefadevert" if is_vertical else "slidefade"
 
-    return f"""exec-once = uwsm-app $(python {home}/.config/{APP_NAME_CAP}/main.py)
+    # Use ax-shell binary on NixOS, python script on Arch
+    if is_nixos():
+        ax_shell_cmd = "ax-shell"
+        ax_shell_inspector_cmd = "GTK_DEBUG=interactive ax-shell"
+    else:
+        ax_shell_cmd = f"python {home}/.config/{APP_NAME_CAP}/main.py"
+        ax_shell_inspector_cmd = f"GTK_DEBUG=interactive python {home}/.config/{APP_NAME_CAP}/main.py"
+
+    return f"""exec-once = uwsm-app $({ax_shell_cmd})
 exec = pgrep -x "hypridle" > /dev/null || uwsm app -- hypridle
 exec = uwsm app -- awww-daemon
 exec-once =  wl-paste --type text --watch cliphist store
 exec-once =  wl-paste --type image --watch cliphist store
 
 $fabricSend = fabric-cli exec {APP_NAME}
-$axMessage = notify-send "Axenide" "FIRE IN THE HOLE‼️🗣️🔥🕳️" -i "{home}/.config/{APP_NAME_CAP}/assets/ax.png" -A "🗣️" -A "🔥" -A "🕳️" -a "Source Code"
+$axMessage = notify-send "Axenide" "FIRE IN THE HOLE‼️🗣️🔥🕳️" -i "{ax_icon_path}" -A "🗣️" -A "🔥" -A "🕳️" -a "Source Code"
 
-bind = {get_bind_var("prefix_restart")}, {get_bind_var("suffix_restart")}, exec, killall {APP_NAME}; uwsm-app $(python {home}/.config/{APP_NAME_CAP}/main.py) # Reload {APP_NAME_CAP}
+bind = {get_bind_var("prefix_restart")}, {get_bind_var("suffix_restart")}, exec, killall {APP_NAME}; uwsm-app $({ax_shell_cmd}) # Reload {APP_NAME_CAP}
 bind = {get_bind_var("prefix_axmsg")}, {get_bind_var("suffix_axmsg")}, exec, $axMessage # Message
 bind = {get_bind_var("prefix_dash")}, {get_bind_var("suffix_dash")}, exec, $fabricSend 'notch.open_notch("dashboard")' # Dashboard
 bind = {get_bind_var("prefix_bluetooth")}, {get_bind_var("suffix_bluetooth")}, exec, $fabricSend 'notch.open_notch("bluetooth")' # Bluetooth
@@ -276,7 +287,7 @@ bind = {get_bind_var("prefix_power")}, {get_bind_var("suffix_power")}, exec, $fa
 bind = {get_bind_var("prefix_caffeine")}, {get_bind_var("suffix_caffeine")}, exec, $fabricSend 'notch.dashboard.widgets.buttons.caffeine_button.toggle_inhibit(external=True)' # Toggle Caffeine
 bind = {get_bind_var("prefix_toggle")}, {get_bind_var("suffix_toggle")}, exec, $fabricSend 'from utils.global_keybinds import get_global_keybind_handler; get_global_keybind_handler().toggle_bar()' # Toggle Bar
 bind = {get_bind_var("prefix_css")}, {get_bind_var("suffix_css")}, exec, $fabricSend 'app.set_css()' # Reload CSS
-bind = {get_bind_var("prefix_restart_inspector")}, {get_bind_var("suffix_restart_inspector")}, exec, killall {APP_NAME}; uwsm-app $(GTK_DEBUG=interactive python {home}/.config/{APP_NAME_CAP}/main.py) # Restart with inspector
+bind = {get_bind_var("prefix_restart_inspector")}, {get_bind_var("suffix_restart_inspector")}, exec, killall {APP_NAME}; uwsm-app $({ax_shell_inspector_cmd}) # Restart with inspector
 
 # Wallpapers directory: {get_bind_var("wallpapers_dir")}
 
@@ -332,10 +343,10 @@ def ensure_face_icon():
     """
     Ensure the face icon exists. If not, copy the default icon.
     """
+    from .platform import get_asset_path
+
     face_icon_path = os.path.expanduser("~/.face.icon")
-    default_icon_path = os.path.expanduser(
-        f"~/.config/{APP_NAME_CAP}/assets/default.png"
-    )
+    default_icon_path = get_asset_path("assets/default.png")
     if not os.path.exists(face_icon_path) and os.path.exists(default_icon_path):
         try:
             shutil.copy(default_icon_path, face_icon_path)

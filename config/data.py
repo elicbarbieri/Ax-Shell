@@ -16,14 +16,14 @@ USERNAME = os.getlogin()
 HOSTNAME = os.uname().nodename
 HOME_DIR = os.path.expanduser("~")
 
-CONFIG_DIR = os.path.expanduser(f"~/.config/{APP_NAME}")
+CONFIG_DIR = os.path.expanduser(f"~/.config/{APP_NAME_CAP}")
 
 screen = Gdk.Screen.get_default()
 CURRENT_WIDTH = screen.get_width()
 CURRENT_HEIGHT = screen.get_height()
 
 CONFIG_FILE = get_relative_path("../config/config.json")
-MATUGEN_STATE_FILE = os.path.join(CONFIG_DIR, "matugen")
+MATUGEN_STATE_FILE = os.path.join(CONFIG_DIR, "matugen_state")
 
 
 def load_config():
@@ -63,7 +63,13 @@ def _get_config_var(setting_str: str):
 
 
 # Set configuration values using defaults from settings_constants
-WALLPAPERS_DIR = _get_config_var("wallpapers_dir")
+_wallpapers_dir_config = _get_config_var("wallpapers_dir")
+# Handle empty or invalid wallpapers_dir (e.g., from NixOS module with null)
+if not _wallpapers_dir_config or not os.path.isdir(_wallpapers_dir_config):
+    from .platform import get_asset_path
+    WALLPAPERS_DIR = get_asset_path("assets/wallpapers_example")
+else:
+    WALLPAPERS_DIR = _wallpapers_dir_config
 BAR_POSITION = _get_config_var("bar_position")
 VERTICAL = BAR_POSITION in ["Left", "Right"]
 CENTERED_BAR = _get_config_var("centered_bar")

@@ -598,9 +598,6 @@ class Notch(Window):
             self.volume_icon.set_from_icon_name(icon_name, 16)
             self.volume_label.set_text(f"{volume_int}%")
 
-        if not self._is_notch_open:
-            self.show_volume_display()
-
     def _handle_microphone_change(self):
         if not self.audio or not self.audio.microphone:
             return
@@ -625,9 +622,6 @@ class Notch(Window):
         else:
             self.mic_icon.set_from_icon_name("microphone-sensitivity-high-symbolic", 16)
             self.mic_label.set_text(f"{volume_int}%")
-
-        if not self._is_notch_open:
-            self.show_mic_display()
 
     def _enable_audio_display(self):
         self._suppress_first_audio_display = False
@@ -738,49 +732,6 @@ class Notch(Window):
         else:
             self.mic_icon.set_from_icon_name("microphone-sensitivity-high-symbolic", 16)
             self.mic_label.set_text(f" {volume_int}%")
-
-    def show_volume_display(self):
-        if self._is_notch_open:
-            return
-
-        if self._current_display_timeout_id:
-            GLib.source_remove(self._current_display_timeout_id)
-
-        # Remember what was showing before the volume notification
-        self._previous_compact_child = self.compact_stack.get_visible_child()
-
-        self.compact_stack.set_visible_child(self.volume_box)
-        self._current_display_timeout_id = GLib.timeout_add(self.VOLUME_DISPLAY_DURATION, self.return_to_normal_view)
-
-    def show_mic_display(self):
-        if self._is_notch_open:
-            return
-
-        if self._current_display_timeout_id:
-            GLib.source_remove(self._current_display_timeout_id)
-
-        # Remember what was showing before the mic notification
-        self._previous_compact_child = self.compact_stack.get_visible_child()
-
-        self.compact_stack.set_visible_child(self.mic_box)
-        self._current_display_timeout_id = GLib.timeout_add(self.VOLUME_DISPLAY_DURATION, self.return_to_normal_view)
-
-    def return_to_normal_view(self):
-        self._current_display_timeout_id = None
-
-        if not self._is_notch_open:
-            current_child = self.compact_stack.get_visible_child()
-            if current_child in [self.volume_box, self.mic_box]:
-                # Restore whatever was showing before the notification
-                if self._previous_compact_child is not None:
-                    self.compact_stack.set_visible_child(self._previous_compact_child)
-                else:
-                    # Fallback to active_window_box if we somehow don't have a previous state
-                    self.compact_stack.set_visible_child(self.active_window_box)
-
-                self._previous_compact_child = None
-
-        return False
 
     def on_button_enter(self, widget, event):
         self.is_hovered = True

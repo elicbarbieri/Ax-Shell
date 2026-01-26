@@ -18,6 +18,9 @@ from modules.updater import run_updater
 
 fonts_updated_file = f"{CACHE_DIR}/fonts_updated"
 
+# Module-level app variable for fabric-cli exec access
+app = None
+
 if __name__ == "__main__":
     setproctitle.setproctitle(APP_NAME)
 
@@ -27,10 +30,10 @@ if __name__ == "__main__":
 
     current_wallpaper = os.path.expanduser("~/.current.wall")
     if not os.path.exists(current_wallpaper):
-        example_wallpaper = os.path.expanduser(
-            f"~/.config/{APP_NAME_CAP}/assets/wallpapers_example/example-1.jpg"
-        )
-        os.symlink(example_wallpaper, current_wallpaper)
+        from config.platform import get_asset_path
+        example_wallpaper = get_asset_path("assets/wallpapers_example/example-1.jpg")
+        if os.path.exists(example_wallpaper):
+            os.symlink(example_wallpaper, current_wallpaper)
 
     # Load configuration
     from config.data import load_config
@@ -139,9 +142,21 @@ if __name__ == "__main__":
     app = Application(f"{APP_NAME}", *app_components)
 
     def set_css():
-        app.set_stylesheet_from_file(
-            get_relative_path("main.css"),
-        )
+        from config.platform import get_package_root, get_user_config_dir
+
+        # Concatenate colors.css (defines CSS variables) + main.css (uses them)
+        combined_css = ""
+
+        colors_css_path = os.path.join(get_user_config_dir(), "styles", "colors.css")
+        if os.path.exists(colors_css_path):
+            with open(colors_css_path, "r") as f:
+                combined_css += f.read() + "\n"
+
+        main_css_path = os.path.join(get_package_root(), "main.css")
+        with open(main_css_path, "r") as f:
+            combined_css += f.read()
+
+        app.set_stylesheet_from_string(combined_css)
 
     app.set_css = set_css
 

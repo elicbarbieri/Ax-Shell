@@ -209,25 +209,29 @@ class WallpaperSelector(Box):
     def _load_wallpapers_async(self):
         """Non-blocking wallpaper processing."""
 
+        # Check if wallpapers directory is writable (skip renaming for nix store)
+        is_writable = os.access(data.WALLPAPERS_DIR, os.W_OK)
+
         # Process old wallpapers: use os.scandir for efficiency and only loop
         # over image files that actually need renaming (they're not already lowercase
         # and with hyphens instead of spaces)
-        with os.scandir(data.WALLPAPERS_DIR) as entries:
-            for entry in entries:
-                if entry.is_file() and self._is_image(entry.name):
-                    # Check if the file needs renaming: file should be lowercase and have hyphens instead of spaces
-                    if entry.name != entry.name.lower() or " " in entry.name:
-                        new_name = entry.name.lower().replace(" ", "-")
-                        full_path = os.path.join(data.WALLPAPERS_DIR, entry.name)
-                        new_full_path = os.path.join(data.WALLPAPERS_DIR, new_name)
-                        try:
-                            os.rename(full_path, new_full_path)
-                            print(
-                                f"Renamed old wallpaper '{full_path}' to '{new_full_path}'"
-                            )
-                        except Exception as e:
-                            print(f"Error renaming file {full_path}: {e}")
-                        yield
+        if is_writable:
+            with os.scandir(data.WALLPAPERS_DIR) as entries:
+                for entry in entries:
+                    if entry.is_file() and self._is_image(entry.name):
+                        # Check if the file needs renaming: file should be lowercase and have hyphens instead of spaces
+                        if entry.name != entry.name.lower() or " " in entry.name:
+                            new_name = entry.name.lower().replace(" ", "-")
+                            full_path = os.path.join(data.WALLPAPERS_DIR, entry.name)
+                            new_full_path = os.path.join(data.WALLPAPERS_DIR, new_name)
+                            try:
+                                os.rename(full_path, new_full_path)
+                                print(
+                                    f"Renamed old wallpaper '{full_path}' to '{new_full_path}'"
+                                )
+                            except Exception as e:
+                                print(f"Error renaming file {full_path}: {e}")
+                            yield
 
         # Process files in small batches to keep UI responsive
         file_list = os.listdir(data.WALLPAPERS_DIR)
@@ -323,17 +327,18 @@ class WallpaperSelector(Box):
                 GLib.idle_add(self.arrange_viewport, self.search_entry.get_text())
         elif event_type == Gio.FileMonitorEvent.CREATED:
             if self._is_image(file_name):
-                # Convert filename to lowercase and replace spaces with "-"
-                new_name = file_name.lower().replace(" ", "-")
-                full_path = os.path.join(data.WALLPAPERS_DIR, file_name)
-                new_full_path = os.path.join(data.WALLPAPERS_DIR, new_name)
-                if new_name != file_name:
-                    try:
-                        os.rename(full_path, new_full_path)
-                        file_name = new_name
-                        print(f"Renamed file '{full_path}' to '{new_full_path}')")
-                    except Exception as e:
-                        print(f"Error renaming file {full_path}: {e}")
+                # Convert filename to lowercase and replace spaces with "-" (only if writable)
+                if os.access(data.WALLPAPERS_DIR, os.W_OK):
+                    new_name = file_name.lower().replace(" ", "-")
+                    full_path = os.path.join(data.WALLPAPERS_DIR, file_name)
+                    new_full_path = os.path.join(data.WALLPAPERS_DIR, new_name)
+                    if new_name != file_name:
+                        try:
+                            os.rename(full_path, new_full_path)
+                            file_name = new_name
+                            print(f"Renamed file '{full_path}' to '{new_full_path}')")
+                        except Exception as e:
+                            print(f"Error renaming file {full_path}: {e}")
                 if file_name not in self.files:
                     self.files.append(file_name)
                     self.files.sort()
