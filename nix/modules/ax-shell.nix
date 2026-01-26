@@ -1,3 +1,5 @@
+# Module receives `self` (the flake) as first argument
+self:
 {
   config,
   lib,
@@ -9,6 +11,9 @@
 let
   cfg = config.programs.ax-shell;
   ax-shell-lib = import ./lib.nix { inherit lib; };
+
+  # Get the package from the flake for this system
+  defaultPackage = self.packages.${pkgs.system}.default;
 in
 {
   options.programs.ax-shell = {
@@ -18,8 +23,8 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.callPackage ../packages/ax-shell.nix {};
-      defaultText = lib.literalExpression "pkgs.callPackage ../packages/ax-shell.nix {}";
+      default = defaultPackage;
+      defaultText = lib.literalExpression "ax-shell.packages.\${pkgs.system}.default";
       description = ''
         The ax-shell package to use. The package will be automatically configured
         with the module settings when possible.

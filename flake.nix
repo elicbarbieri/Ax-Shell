@@ -34,7 +34,7 @@
       {
         # Packages for direct installation
         packages = {
-          ax-shell = pkgs.callPackage ./nix/packages/ax-shell.nix {};
+          ax-shell = pkgs.callPackage ./nix/packages/ax-shell.nix { flakeSrc = self; };
           fabric-cli = pkgs.callPackage ./nix/packages/fabric-cli.nix {};
           zed-fonts = pkgs.callPackage ./nix/packages/zed-fonts.nix {};
           default = self.packages.${system}.ax-shell;
@@ -136,15 +136,16 @@
       }
     ) // {
       # NixOS modules (system-independent)
+      # Pass self so module can access packages
       nixosModules = {
-        ax-shell = import ./nix/modules/ax-shell.nix;
+        ax-shell = import ./nix/modules/ax-shell.nix self;
         default = self.nixosModules.ax-shell;
       };
 
       # Package overlays for easy integration
       overlays = {
         default = final: prev: {
-          ax-shell = prev.callPackage ./nix/packages/ax-shell.nix {};
+          ax-shell = prev.callPackage ./nix/packages/ax-shell.nix { flakeSrc = self; };
         };
       };
     };

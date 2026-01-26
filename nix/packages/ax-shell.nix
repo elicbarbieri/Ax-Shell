@@ -39,18 +39,22 @@
 , moduleConfig ? null
 , ax-shell-lib ? null
 , username ? null
+# Source override - when called from flake, use self; otherwise fetch from GitHub
+, flakeSrc ? null
 }:
 
 python3Packages.buildPythonApplication rec {
   pname = "ax-shell";
-  version = "v0.0.63";
+  version = "0.0.64";
   format = "other";
 
-  src = fetchFromGitHub {
+  # If flakeSrc provided (via flake), use it; otherwise fetch from GitHub
+  # The fetchFromGitHub fallback is for users not using the flake
+  src = if flakeSrc != null then flakeSrc else fetchFromGitHub {
     owner = "elicbarbieri";
     repo = "ax-shell";
-    rev = "321b6ec8b1c3314db16e30df93d58129b1292eab";
-    sha256 = "sha256-e4vdbDMtfpXNpZrcXX/53J1oHqa8ZA2o24sPpWLx0IQ=";
+    rev = "v${version}";  # Tags are prefixed with "v"
+    sha256 = lib.fakeSha256;  # Update after creating release tag
   };
 
   # Core Python dependencies

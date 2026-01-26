@@ -143,9 +143,8 @@ def ensure_matugen_config():
 
         image_path = ""
         if not os.path.exists(current_wall):
-            example_wallpaper_path = os.path.expanduser(
-                f"~/.config/{APP_NAME_CAP}/assets/wallpapers_example/example-1.jpg"
-            )
+            from .platform import get_asset_path
+            example_wallpaper_path = get_asset_path("assets/wallpapers_example/example-1.jpg")
             if os.path.exists(example_wallpaper_path):
                 try:
                     # Si ya existe (posiblemente un enlace roto o archivo regular), eliminar y re-enlazar
