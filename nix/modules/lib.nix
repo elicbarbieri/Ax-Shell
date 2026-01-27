@@ -71,6 +71,7 @@ in
       dock_always_occluded = cfg.dockAlwaysOccluded;
       dock_icon_size = 28;
       bar_workspace_show_number = cfg.barWorkspaceShowNumber;
+      selected_monitors = cfg.selectedMonitors;
     };
 
   # Generate Hyprland keybinds for declarative mode (home-manager extraConfig)

@@ -261,7 +261,18 @@ in
         When true, workspace indicators will display numbers.
       '';
     };
-    
+
+    selectedMonitors = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      example = [ "DP-1" "HDMI-A-1" ];
+      description = ''
+        List of monitor names to display ax-shell on.
+        When empty (default), ax-shell will display on all monitors.
+        Monitor names can be found using `hyprctl monitors`.
+      '';
+    };
+
     matugen = lib.mkOption {
       type = lib.types.submodule {
         options = {

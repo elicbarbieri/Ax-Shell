@@ -45,7 +45,7 @@
 
 python3Packages.buildPythonApplication rec {
   pname = "ax-shell";
-  version = "0.0.64";
+  version = "0.0.65";
   format = "other";
 
   # If flakeSrc provided (via flake), use it; otherwise fetch from GitHub
