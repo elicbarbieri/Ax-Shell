@@ -82,7 +82,7 @@
             pkgs.imagemagick
             pkgs.wl-clipboard
             pkgs.procps
-            pkgs.swww
+            pkgs.awww
             pkgs.matugen
             pkgs.socat
 

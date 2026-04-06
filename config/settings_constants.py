@@ -100,4 +100,9 @@ DEFAULTS = {
     "limited_apps_history": ["Spotify"],
     "history_ignored_apps": ["Hyprshot"],
     "selected_monitors": [],
+    "weather_location": "",
+    "dashboard_kanban_visible": True,
+    "dashboard_pins_visible": True,
+    "dashboard_wallpapers_visible": True,
+    "dashboard_mixer_visible": True,
 }

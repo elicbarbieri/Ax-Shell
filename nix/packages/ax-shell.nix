@@ -31,7 +31,7 @@
 , imagemagick
 , wl-clipboard
 , procps
-, swww
+, awww
 , matugen
 , bibata-cursors
 , makeDesktopItem
@@ -80,7 +80,7 @@ python3Packages.buildPythonApplication rec {
     webp-pixbuf-loader
     dbus dbus-glib
     brightnessctl cliphist hyprshot playerctl libnotify cava
-    imagemagick wl-clipboard procps swww matugen
+    imagemagick wl-clipboard procps awww matugen
     bibata-cursors
     (callPackage ./fabric-cli.nix {})
     (callPackage ./gray.nix {})
@@ -147,7 +147,7 @@ EOF
   preFixup = ''
     makeWrapperArgs+=(
       --prefix PYTHONPATH : "$out/lib/ax-shell"
-      --prefix PATH : "${lib.makeBinPath [ cava brightnessctl cliphist hyprshot playerctl imagemagick wl-clipboard procps swww matugen ]}"
+      --prefix PATH : "${lib.makeBinPath [ cava brightnessctl cliphist hyprshot playerctl imagemagick wl-clipboard procps awww matugen ]}"
       --set WAYLAND_DISPLAY "wayland-1"
       --set GDK_BACKEND "wayland"
       --set XDG_CURRENT_DESKTOP "Hyprland"

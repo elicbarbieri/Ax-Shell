@@ -291,7 +291,7 @@ in
             default = "";
             description = ''
               Additional matugen configuration to append to the generated config.toml.
-              The base configuration will include swww wallpaper integration and
+              The base configuration will include awww wallpaper integration and
               ax-shell template paths. Use this to add custom colors or additional templates.
               
               Example:
@@ -341,7 +341,7 @@ in
       pkgs.imagemagick   # for image processing
       pkgs.libnotify     # notify-send command
       # Wallpaper and theming
-      pkgs.swww      # Wallpaper daemon
+      pkgs.awww      # Wallpaper daemon
       pkgs.matugen   # Material You color generator
       (pkgs.callPackage ../packages/fabric-cli.nix {})  # fabric-cli needed by matugen post_hook
       # Cursor theme for GTK apps
@@ -374,7 +374,7 @@ in
           reload_apps = true
           
           [config.wallpaper]
-          command = "swww"
+          command = "awww"
           arguments = ["img", "-t", "outer", "--transition-duration", "1.5", "--transition-step", "255", "--transition-fps", "60", "-f", "Nearest"]
           set = true
           
