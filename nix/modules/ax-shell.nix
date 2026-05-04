@@ -13,7 +13,7 @@ let
   ax-shell-lib = import ./lib.nix { inherit lib; };
 
   # Get the package from the flake for this system
-  defaultPackage = self.packages.${pkgs.system}.default;
+  defaultPackage = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   options.programs.ax-shell = {
@@ -24,7 +24,7 @@ in
     package = lib.mkOption {
       type = lib.types.package;
       default = defaultPackage;
-      defaultText = lib.literalExpression "ax-shell.packages.\${pkgs.system}.default";
+      defaultText = lib.literalExpression "ax-shell.packages.\${pkgs.stdenv.hostPlatform.system}.default";
       description = ''
         The ax-shell package to use. The package will be automatically configured
         with the module settings when possible.
