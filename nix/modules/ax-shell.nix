@@ -97,153 +97,6 @@ in
       '';
     };
     
-    keybinds = lib.mkOption {
-      type = lib.types.submodule {
-        options = {
-          mode = lib.mkOption {
-            type = lib.types.enum [ "declarative" "disabled" ];
-            default = "disabled";
-            description = ''
-              Keybind management mode:
-              - declarative: Managed via home-manager (requires wayland.windowManager.hyprland.enable = true)
-              - disabled: No keybinds generated, manage manually (see README.md keybind reference)
-            '';
-          };
-
-          restart = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "SUPER ALT, B";
-            example = "SUPER SHIFT, R";
-            description = "Keybinding to restart ax-shell (killall + restart)";
-          };
-          
-          launcher = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "SUPER, R";
-            example = "SUPER, SPACE";
-            description = "Keybinding for application launcher";
-          };
-
-          dashboard = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "SUPER, D";
-            example = "SUPER, H";
-            description = "Keybinding to open dashboard";
-          };
-
-          overview = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "SUPER, TAB";
-            example = "ALT, TAB";
-            description = "Keybinding to open workspace overview";
-          };
-
-          power = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "SUPER, ESCAPE";
-            example = "SUPER SHIFT, P";
-            description = "Keybinding to open power menu";
-          };
-
-          toolbox = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "SUPER, S";
-            example = null;
-            description = "Keybinding to open toolbox";
-          };
-
-          pins = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, Q";
-            description = "Keybinding to open pins/bookmarks";
-          };
-
-          kanban = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, N";
-            description = "Keybinding to open kanban board";
-          };
-
-          tmux = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, T";
-            description = "Keybinding to open tmux session selector";
-          };
-
-          wallpapers = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, COMMA";
-            description = "Keybinding to open wallpaper selector";
-          };
-
-          randomWallpaper = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER SHIFT, COMMA";
-            description = "Keybinding to set random wallpaper";
-          };
-
-          audioMixer = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, M";
-            description = "Keybinding to open audio mixer";
-          };
-
-          emojiPicker = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, PERIOD";
-            description = "Keybinding to open emoji picker";
-          };
-
-          clipboardHistory = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, V";
-            description = "Keybinding to open clipboard history";
-          };
-
-          bluetooth = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER, B";
-            description = "Keybinding to open bluetooth manager";
-          };
-
-          toggleBar = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER CTRL, B";
-            description = "Keybinding to toggle bar visibility";
-          };
-
-          toggleCaffeine = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER SHIFT, M";
-            description = "Keybinding to toggle caffeine mode (disable auto-sleep)";
-          };
-
-          reloadCss = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            example = "SUPER SHIFT, B";
-            description = "Keybinding to reload CSS styles";
-          };
-        };
-      };
-      default = {};
-      description = ''
-        Keybind configuration for ax-shell. Set mode to choose management style.
-        Individual keybinds can be disabled by setting them to null.
-      '';
-    };
-
     dockAlwaysOccluded = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -316,14 +169,6 @@ in
       {
         assertion = cfg.user != "";
         message = "ax-shell requires a user to be specified via programs.ax-shell.user";
-      }
-      {
-        assertion = cfg.keybinds.mode != "declarative" || 
-          config.home-manager.users.${cfg.user}.wayland.windowManager.hyprland.enable or false;
-        message = ''
-          Declarative keybind mode requires wayland.windowManager.hyprland.enable = true in home-manager.
-          Either enable hyprland via home-manager or use keybinds.mode = "disabled" and manage keybinds manually.
-        '';
       }
     ];
     
@@ -447,9 +292,6 @@ in
         # After that, user modifications are preserved
         force = false;
       };
-    } // lib.optionalAttrs (cfg.keybinds.mode == "declarative") {
-      # Declarative mode: inject keybinds into home-manager hyprland config
-      wayland.windowManager.hyprland.extraConfig = ax-shell-lib.generateHyprlandKeybinds cfg.keybinds;
     };
     
   };

@@ -107,7 +107,7 @@ class HyprlandWindowButton(Button):
             size=size,
             on_clicked=self.on_button_click,
             on_button_press_event=lambda _, event: connection.send_command(
-                f"/dispatch closewindow address:{address}"
+                f'/dispatch hl.dsp.window.close({{window="address:{address}"}})'
             )
             if event.button == 3
             else None,
@@ -133,7 +133,9 @@ class HyprlandWindowButton(Button):
     def on_key_press_event(self, widget, event):
         if event.get_state() & Gdk.ModifierType.SHIFT_MASK:
             if event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
-                connection.send_command(f"/dispatch closewindow address:{self.address}")
+                connection.send_command(
+                    f'/dispatch hl.dsp.window.close({{window="address:{self.address}"}})'
+                )
                 return True
         return False
 
@@ -176,7 +178,9 @@ class HyprlandWindowButton(Button):
         )
 
     def on_button_click(self, *_):
-        connection.send_command(f"/dispatch focuswindow address:{self.address}")
+        connection.send_command(
+            f'/dispatch hl.dsp.focus({{window="address:{self.address}"}})'
+        )
 
 
 class WorkspaceEventBox(EventBox):
@@ -205,7 +209,7 @@ class WorkspaceEventBox(EventBox):
                 markup=icons.circle_plus,
             ),
             on_drag_data_received=lambda _w, _c, _x, _y, data, *_: connection.send_command(
-                f"/dispatch movetoworkspacesilent {workspace_id},address:{data.get_data().decode()}"
+                f'/dispatch hl.dsp.window.move({{window="address:{data.get_data().decode()}", workspace={workspace_id}, follow=false}})'
             ),
         )
         self.drag_dest_set(

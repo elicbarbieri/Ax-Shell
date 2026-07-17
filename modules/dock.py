@@ -3,7 +3,7 @@ import logging
 
 import cairo
 from fabric.hyprland.widgets import get_hyprland_connection
-from fabric.utils import (exec_shell_command, exec_shell_command_async,
+from fabric.utils import (exec_shell_command_async,
                           get_relative_path, idle_add, remove_handler)
 from fabric.utils.helpers import get_desktop_applications
 from fabric.widgets.box import Box
@@ -21,6 +21,7 @@ from utils.app_helpers import (
     classes_match,
     find_app_by_identifier,
 )
+from utils.functions import hypr_focus_window
 from utils.icon_resolver import IconResolver
 from widgets.wayland import WaylandWindow as Window
 
@@ -444,7 +445,7 @@ class Dock(Window):
             focused = self.get_focused()
             idx = next((i for i, inst in enumerate(instances) if inst["address"] == focused), -1)
             next_inst = instances[(idx + 1) % len(instances)]
-            exec_shell_command(f"hyprctl dispatch focuswindow address:{next_inst['address']}")
+            hypr_focus_window(f"address:{next_inst['address']}", sync=True)
 
     def _on_child_enter(self, widget, event):
         if self.integrated_mode: return False 
@@ -717,7 +718,7 @@ class Dock(Window):
                 elif instances_dragged:
                     address = instances_dragged[0].get("address")
                     if address:
-                        exec_shell_command(f"hyprctl dispatch focuswindow address:{address}")
+                        hypr_focus_window(f"address:{address}", sync=True)
 
             self._drag_in_progress = False
             if not self.integrated_mode:

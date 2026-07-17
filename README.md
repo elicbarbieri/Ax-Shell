@@ -127,6 +127,65 @@ curl -fsSL https://raw.githubusercontent.com/Axenide/Ax-Shell/main/install.sh | 
     uwsm -- app python ~/.config/Ax-Shell/main.py > /dev/null 2>&1 & disown
     ```
 
+<h2><sub><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Gear.png" alt="Gear" width="25" height="25" /></sub> Hyprland Configuration</h2>
+
+Since **Hyprland 0.55** the config format is Lua (`~/.config/hypr/hyprland.lua`), and
+when a `hyprland.lua` is present Hyprland ignores `hyprland.conf` entirely. Ax-Shell
+therefore does **not** generate or append any Hyprland config — you wire it up
+yourself in Lua. Add the following to your `hyprland.lua` (or a module you
+`require` from it) to autostart Ax-Shell and bind its widgets:
+
+```lua
+-- Ax-Shell integration for Hyprland (Lua config, 0.55+)
+
+-- Autostart Ax-Shell and its helpers once, at startup.
+hl.on("hyprland.start", function()
+    hl.exec_cmd("uwsm app -- awww-daemon")                               -- wallpaper daemon
+    hl.exec_cmd("uwsm app -- ax-shell")                                  -- the shell itself
+    hl.exec_cmd([[pgrep -x hypridle > /dev/null || uwsm app -- hypridle]])
+    hl.exec_cmd([[wl-paste --type text  --watch cliphist store]])        -- clipboard history
+    hl.exec_cmd([[wl-paste --type image --watch cliphist store]])
+end)
+
+-- Don't animate Ax-Shell's own layer surface.
+hl.layer_rule({ match = { namespace = "fabric" }, no_anim = true })
+
+-- Open a "notch" widget via fabric-cli.
+local function notch(name)
+    return hl.dsp.exec_cmd(string.format([[fabric-cli exec ax-shell 'notch.open_notch("%s")']], name))
+end
+
+hl.bind("SUPER + R",             notch("launcher"))
+hl.bind("SUPER + D",             notch("dashboard"))
+hl.bind("SUPER + B",             notch("bluetooth"))
+hl.bind("SUPER + Q",             notch("pins"))
+hl.bind("SUPER + N",             notch("kanban"))
+hl.bind("SUPER + T",             notch("tmux"))
+hl.bind("SUPER + V",             notch("cliphist"))
+hl.bind("SUPER + S",             notch("tools"))
+hl.bind("SUPER + TAB",           notch("overview"))
+hl.bind("SUPER + COMMA",         notch("wallpapers"))
+hl.bind("SUPER + M",             notch("mixer"))
+hl.bind("SUPER + PERIOD",        notch("emoji"))
+hl.bind("SUPER + ESCAPE",        notch("power"))
+
+-- Run an arbitrary Ax-Shell action via fabric-cli.
+local function fabric(code)
+    return hl.dsp.exec_cmd(string.format([[fabric-cli exec ax-shell '%s']], code))
+end
+
+hl.bind("SUPER + ALT + B",       hl.dsp.exec_cmd("killall ax-shell; uwsm app -- ax-shell"))  -- restart Ax-Shell
+hl.bind("SUPER + SHIFT + B",     fabric("app.set_css()"))                                     -- reload CSS
+hl.bind("SUPER + SHIFT + COMMA", fabric("notch.dashboard.wallpapers.set_random_wallpaper(None, external=True)"))
+hl.bind("SUPER + SHIFT + M",     fabric("notch.dashboard.widgets.buttons.caffeine_button.toggle_inhibit(external=True)"))
+hl.bind("SUPER + CTRL + B",      fabric("from utils.global_keybinds import get_global_keybind_handler; get_global_keybind_handler().toggle_bar()"))
+```
+
+> [!NOTE]
+> Ax-Shell's Matugen color theme for **Hyprlock** is still written to
+> `~/.config/Ax-Shell/config/hypr/colors.conf`. Keep the
+> `source = ~/.config/Ax-Shell/config/hypr/colors.conf` line in your `hyprlock.conf`.
+
 <h2><sub><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Rocket.png" alt="Rocket" width="25" height="25" /></sub> Roadmap</h2>
 
 - [x] App Launcher

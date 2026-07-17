@@ -1,16 +1,12 @@
 import json
 import os
 import shutil
-import subprocess
-import time
-from pathlib import Path
 
 import gi
 import toml
 
 gi.require_version("Gtk", "3.0")
 from fabric.utils.helpers import exec_shell_command_async
-from gi.repository import GLib
 
 # Importar settings_constants para DEFAULTS
 from . import settings_constants
@@ -237,107 +233,6 @@ def load_bind_vars():
     # print(f"Config file {config_json} not found. Using defaults (already initialized).")
 
 
-def generate_hyprconf() -> str:
-    """
-    Generate the Hypr configuration string using the current bind_vars.
-    """
-    from .platform import get_asset_path, is_nixos
-
-    home = os.path.expanduser("~")
-    ax_icon_path = get_asset_path("assets/ax.png")
-    # Determine animation type based on bar position
-    bar_position = get_bind_var("bar_position")
-    is_vertical = bar_position in ["Left", "Right"]
-    animation_type = "slidefadevert" if is_vertical else "slidefade"
-
-    # Use ax-shell binary on NixOS, python script on Arch
-    if is_nixos():
-        ax_shell_cmd = "ax-shell"
-        ax_shell_inspector_cmd = "GTK_DEBUG=interactive ax-shell"
-    else:
-        ax_shell_cmd = f"python {home}/.config/{APP_NAME_CAP}/main.py"
-        ax_shell_inspector_cmd = f"GTK_DEBUG=interactive python {home}/.config/{APP_NAME_CAP}/main.py"
-
-    return f"""exec-once = uwsm-app $({ax_shell_cmd})
-exec = pgrep -x "hypridle" > /dev/null || uwsm app -- hypridle
-exec = uwsm app -- awww-daemon
-exec-once =  wl-paste --type text --watch cliphist store
-exec-once =  wl-paste --type image --watch cliphist store
-
-$fabricSend = fabric-cli exec {APP_NAME}
-$axMessage = notify-send "Axenide" "FIRE IN THE HOLE‼️🗣️🔥🕳️" -i "{ax_icon_path}" -A "🗣️" -A "🔥" -A "🕳️" -a "Source Code"
-
-bind = {get_bind_var("prefix_restart")}, {get_bind_var("suffix_restart")}, exec, killall {APP_NAME}; uwsm-app $({ax_shell_cmd}) # Reload {APP_NAME_CAP}
-bind = {get_bind_var("prefix_axmsg")}, {get_bind_var("suffix_axmsg")}, exec, $axMessage # Message
-bind = {get_bind_var("prefix_dash")}, {get_bind_var("suffix_dash")}, exec, $fabricSend 'notch.open_notch("dashboard")' # Dashboard
-bind = {get_bind_var("prefix_bluetooth")}, {get_bind_var("suffix_bluetooth")}, exec, $fabricSend 'notch.open_notch("bluetooth")' # Bluetooth
-bind = {get_bind_var("prefix_pins")}, {get_bind_var("suffix_pins")}, exec, $fabricSend 'notch.open_notch("pins")' # Pins
-bind = {get_bind_var("prefix_kanban")}, {get_bind_var("suffix_kanban")}, exec, $fabricSend 'notch.open_notch("kanban")' # Kanban
-bind = {get_bind_var("prefix_launcher")}, {get_bind_var("suffix_launcher")}, exec, $fabricSend 'notch.open_notch("launcher")' # App Launcher
-bind = {get_bind_var("prefix_tmux")}, {get_bind_var("suffix_tmux")}, exec, $fabricSend 'notch.open_notch("tmux")' # Tmux
-bind = {get_bind_var("prefix_cliphist")}, {get_bind_var("suffix_cliphist")}, exec, $fabricSend 'notch.open_notch("cliphist")' # Clipboard History
-bind = {get_bind_var("prefix_toolbox")}, {get_bind_var("suffix_toolbox")}, exec, $fabricSend 'notch.open_notch("tools")' # Toolbox
-bind = {get_bind_var("prefix_overview")}, {get_bind_var("suffix_overview")}, exec, $fabricSend 'notch.open_notch("overview")' # Overview
-bind = {get_bind_var("prefix_wallpapers")}, {get_bind_var("suffix_wallpapers")}, exec, $fabricSend 'notch.open_notch("wallpapers")' # Wallpapers
-bind = {get_bind_var("prefix_randwall")}, {get_bind_var("suffix_randwall")}, exec, $fabricSend 'notch.dashboard.wallpapers.set_random_wallpaper(None, external=True)' # Random Wallpaper
-bind = {get_bind_var("prefix_mixer")}, {get_bind_var("suffix_mixer")}, exec, $fabricSend 'notch.open_notch("mixer")' # Audio Mixer
-bind = {get_bind_var("prefix_emoji")}, {get_bind_var("suffix_emoji")}, exec, $fabricSend 'notch.open_notch("emoji")' # Emoji Picker
-bind = {get_bind_var("prefix_power")}, {get_bind_var("suffix_power")}, exec, $fabricSend 'notch.open_notch("power")' # Power Menu
-bind = {get_bind_var("prefix_caffeine")}, {get_bind_var("suffix_caffeine")}, exec, $fabricSend 'notch.dashboard.widgets.buttons.caffeine_button.toggle_inhibit(external=True)' # Toggle Caffeine
-bind = {get_bind_var("prefix_toggle")}, {get_bind_var("suffix_toggle")}, exec, $fabricSend 'from utils.global_keybinds import get_global_keybind_handler; get_global_keybind_handler().toggle_bar()' # Toggle Bar
-bind = {get_bind_var("prefix_css")}, {get_bind_var("suffix_css")}, exec, $fabricSend 'app.set_css()' # Reload CSS
-bind = {get_bind_var("prefix_restart_inspector")}, {get_bind_var("suffix_restart_inspector")}, exec, killall {APP_NAME}; uwsm-app $({ax_shell_inspector_cmd}) # Restart with inspector
-
-# Wallpapers directory: {get_bind_var("wallpapers_dir")}
-
-source = {home}/.config/{APP_NAME_CAP}/config/hypr/colors.conf
-
-layerrule = noanim, fabric
-
-exec = cp $wallpaper ~/.current.wall
-
-general {{
-    col.active_border = rgb($primary)
-    col.inactive_border = rgb($surface)
-    gaps_in = 2
-    gaps_out = 4
-    border_size = 2
-    layout = dwindle
-}}
-
-cursor {{
-  no_warps=true
-}}
-
-decoration {{
-    blur {{
-        enabled = yes
-        size = 1
-        passes = 3
-        new_optimizations = yes
-        contrast = 1
-        brightness = 1
-    }}
-    rounding = 14
-    shadow {{
-      enabled = true
-      range = 10
-      render_power = 2
-      color = rgba(0, 0, 0, 0.25)
-    }}
-}}
-
-animations {{
-    enabled = yes
-    bezier = myBezier, 0.4, 0.0, 0.2, 1.0
-    animation = windows, 1, 2.5, myBezier, popin 80%
-    animation = border, 1, 2.5, myBezier
-    animation = fade, 1, 2.5, myBezier
-    animation = workspaces, 1, 2.5, myBezier, {animation_type} 20%
-}}
-"""
-
-
 def ensure_face_icon():
     """
     Ensure the face icon exists. If not, copy the default icon.
@@ -375,41 +270,13 @@ def backup_and_replace(src: str, dest: str, config_name: str):
 
 def start_config():
     """
-    Run final configuration steps: ensure necessary configs, write the hyprconf, and reload.
+    Run final configuration steps: ensure the matugen theme config and face
+    icon exist.
+
+    Ax-Shell no longer generates a Hyprland config fragment. Since Hyprland
+    0.55 the config is Lua and `hyprland.conf` is ignored when a `hyprland.lua`
+    is present, so binds/exec/window rules are set up by the user directly in
+    Lua (see the README for a ready-to-use snippet).
     """
-    print(f"{time.time():.4f}: start_config: Ensuring matugen config...")
     ensure_matugen_config()
-    print(f"{time.time():.4f}: start_config: Ensuring face icon...")
     ensure_face_icon()
-    print(f"{time.time():.4f}: start_config: Generating hypr conf...")
-
-    hypr_config_dir = os.path.expanduser(f"~/.config/{APP_NAME_CAP}/config/hypr/")
-    os.makedirs(hypr_config_dir, exist_ok=True)
-    # Usar APP_NAME para el nombre del archivo .conf para que coincida con SOURCE_STRING corregido
-    hypr_conf_path = os.path.join(hypr_config_dir, f"{APP_NAME}.conf")
-    try:
-        with open(hypr_conf_path, "w") as f:
-            f.write(generate_hyprconf())
-        print(f"Generated Hyprland config at {hypr_conf_path}")
-    except Exception as e:
-        print(f"Error writing Hyprland config: {e}")
-    print(f"{time.time():.4f}: start_config: Finished generating hypr conf.")
-
-    print(f"{time.time():.4f}: start_config: Initiating hyprctl reload...")
-    try:
-        # subprocess.run(["hyprctl", "reload"], check=True, capture_output=True, text=True)
-        exec_shell_command_async("hyprctl reload")  # Mantener async para no bloquear
-        print(
-            f"{time.time():.4f}: start_config: Hyprland configuration reload initiated."
-        )
-    except FileNotFoundError:
-        print("Error: hyprctl command not found. Cannot reload Hyprland.")
-    except (
-        subprocess.CalledProcessError
-    ) as e:  # Si usáramos subprocess.run con check=True
-        print(
-            f"Error reloading Hyprland with hyprctl: {e}\nOutput:\n{e.stdout}\n{e.stderr}"
-        )
-    except Exception as e:
-        print(f"An error occurred initiating hyprctl reload: {e}")
-    print(f"{time.time():.4f}: start_config: Finished initiating hyprctl reload.")

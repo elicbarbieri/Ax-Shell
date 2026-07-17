@@ -1,5 +1,6 @@
 import datetime
 import os
+import shlex
 import shutil
 import subprocess
 from typing import Dict, List, Literal
@@ -233,3 +234,24 @@ def unique_list(lst) -> List:
 # Function to check if an app is running
 def is_app_running(app_name: str) -> bool:
     return len(exec_shell_command(f"pidof {app_name}")) != 0
+
+
+def hypr_dispatch(lua_expr: str, sync: bool = False):
+    """Issue a Hyprland dispatcher over `hyprctl dispatch`.
+
+    Hyprland 0.55 dropped hyprlang in favour of Lua and, independent of the
+    config format, the running daemon now evaluates `hyprctl dispatch <arg>` as
+    the Lua expression `hl.dispatch(<arg>)`. The legacy positional form
+    (`dispatch workspace 3`, `dispatch exit`, ...) no longer parses. Callers
+    therefore pass a Lua dispatcher expression, e.g. `hl.dsp.exit()` or
+    `hl.dsp.focus({window="class:notch"})`, which we shell-quote so the braces,
+    quotes and parens survive the shell verbatim.
+    """
+    cmd = f"hyprctl dispatch {shlex.quote(lua_expr)}"
+    return exec_shell_command(cmd) if sync else exec_shell_command_async(cmd)
+
+
+def hypr_focus_window(selector: str, sync: bool = False):
+    """Focus a window by Hyprland selector, e.g. `class:notch` or
+    `address:0x556…`."""
+    return hypr_dispatch(f'hl.dsp.focus({{window="{selector}"}})', sync=sync)

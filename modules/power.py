@@ -5,6 +5,7 @@ from fabric.widgets.label import Label
 
 import config.data as data
 import modules.icons as icons
+from utils.functions import hypr_dispatch
 
 tooltip_lock = "Lock"
 tooltip_suspend = "Suspend"
@@ -117,7 +118,7 @@ class PowerMenu(Box):
 
     def logout(self, *args):
         print("Logging out...")
-        exec_shell_command_async("hyprctl dispatch exit")
+        hypr_dispatch("hl.dsp.exit()")
         self.close_menu()
 
     def reboot(self, *args):

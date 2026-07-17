@@ -1,63 +1,12 @@
 from fabric.utils.helpers import get_relative_path
 
-from .data import (
-    APP_NAME,
-    APP_NAME_CAP,
-)
-
-SOURCE_STRING = f"""
-# {APP_NAME_CAP}
-source = ~/.config/{APP_NAME_CAP}/config/hypr/{APP_NAME}.conf
-"""
-
 DEFAULTS = {
-    "prefix_restart": "SUPER ALT",
-    "suffix_restart": "B",
-    "prefix_axmsg": "SUPER",
-    "suffix_axmsg": "A",
-    "prefix_dash": "SUPER",
-    "suffix_dash": "D",
-    "prefix_bluetooth": "SUPER",
-    "suffix_bluetooth": "B",
-    "prefix_pins": "SUPER",
-    "suffix_pins": "Q",
-    "prefix_kanban": "SUPER",
-    "suffix_kanban": "N",
-    "prefix_launcher": "SUPER",
-    "suffix_launcher": "R",
-    "prefix_tmux": "SUPER",
-    "suffix_tmux": "T",
-    "prefix_cliphist": "SUPER",
-    "suffix_cliphist": "V",
-    "prefix_toolbox": "SUPER",
-    "suffix_toolbox": "S",
-    "prefix_overview": "SUPER",
-    "suffix_overview": "TAB",
-    "prefix_wallpapers": "SUPER",
-    "suffix_wallpapers": "COMMA",
-    "prefix_randwall": "SUPER SHIFT",
-    "suffix_randwall": "COMMA",
-    "prefix_mixer": "SUPER",
-    "suffix_mixer": "M",
-    "prefix_emoji": "SUPER",
-    "suffix_emoji": "PERIOD",
-    "prefix_power": "SUPER",
-    "suffix_power": "ESCAPE",
-    "prefix_caffeine": "SUPER SHIFT",
-    "suffix_caffeine": "M",
-    "prefix_toggle": "SUPER CTRL",
-    "suffix_toggle": "B",
-    "prefix_css": "SUPER SHIFT",
-    "suffix_css": "B",
     "wallpapers_dir": get_relative_path("../assets/wallpapers_example"),
-    "prefix_restart_inspector": "SUPER CTRL ALT",
-    "suffix_restart_inspector": "B",
     "bar_position": "Top",
     "vertical": False,
     "centered_bar": False,
     "datetime_12h_format": False,
     "terminal_command": "kitty -e",
-    "auto_append_hyprland": True,
     "dock_enabled": True,
     "dock_icon_size": 28,
     "dock_always_show": False,

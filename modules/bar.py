@@ -4,7 +4,7 @@ import weakref
 
 from fabric.hyprland.service import HyprlandEvent
 from fabric.hyprland.widgets import HyprlandLanguage as Language
-from fabric.hyprland.widgets import HyprlandWorkspaces as Workspaces
+from fabric.hyprland.widgets import HyprlandWorkspaces
 from fabric.hyprland.widgets import WorkspaceButton, get_hyprland_connection
 from fabric.utils.helpers import exec_shell_command_async
 from fabric.widgets.box import Box
@@ -23,9 +23,40 @@ from modules.metrics import Battery, MetricsSmall, NetworkApplet
 from modules.systemprofiles import Systemprofiles
 from modules.systemtray import SystemTray
 from modules.weather import Weather
+from utils.functions import hypr_focus_window
 from widgets.wayland import WaylandWindow as Window
 
 CHINESE_NUMERALS = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "〇"]
+
+
+class Workspaces(HyprlandWorkspaces):
+    """Workspace widget that speaks Hyprland 0.55's Lua dispatch IPC.
+
+    fabric's HyprlandWorkspaces still sends the legacy string form
+    (`dispatch workspace N`) over the command socket. Since Hyprland 0.55 the
+    daemon runs that through Lua as `hl.dispatch(workspace N)`, which fails to
+    parse, so clicking/scrolling a workspace silently does nothing. We override
+    the three dispatch entry points to emit the Lua dispatcher form instead.
+    The relative selectors mirror fabric's originals: `e±1` skips empty
+    workspaces unless `empty_scroll` is set, in which case `±1` includes them.
+    """
+
+    def do_button_clicked(self, button: WorkspaceButton):
+        return self.connection.send_command(
+            f"batch/dispatch hl.dsp.focus({{workspace={button.id}}})"
+        )
+
+    def do_action_next(self):
+        selector = "+1" if self._empty_scroll else "e+1"
+        return self.connection.send_command(
+            f'batch/dispatch hl.dsp.focus({{workspace="{selector}"}})'
+        )
+
+    def do_action_previous(self):
+        selector = "-1" if self._empty_scroll else "e-1"
+        return self.connection.send_command(
+            f'batch/dispatch hl.dsp.focus({{workspace="{selector}"}})'
+        )
 
 # Tooltips
 tooltip_apps = f"""<b><u>Launcher</u></b>
@@ -589,7 +620,7 @@ class Bar(Window):
             # Ensure notch is above bar when bar is shown
             if self.notch:
                 # Focus the notch window to bring it to front
-                GLib.idle_add(lambda: exec_shell_command_async("hyprctl dispatch focuswindow class:notch") if self.notch else None)
+                GLib.idle_add(lambda: hypr_focus_window("class:notch") if self.notch else None)
 
     def chinese_numbers(self):
         if data.BAR_WORKSPACE_USE_CHINESE_NUMERALS:

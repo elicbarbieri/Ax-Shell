@@ -61,14 +61,10 @@ class HyprConfGUI(Window):
             h_expand=True,
         )
 
-        self.key_bindings_tab_content = self.create_key_bindings_tab()
         self.appearance_tab_content = self.create_appearance_tab()
         self.system_tab_content = self.create_system_tab()
         self.about_tab_content = self.create_about_tab()
 
-        self.tab_stack.add_titled(
-            self.key_bindings_tab_content, "key_bindings", "Key Bindings"
-        )
         self.tab_stack.add_titled(
             self.appearance_tab_content, "appearance", "Appearance"
         )
@@ -89,88 +85,6 @@ class HyprConfGUI(Window):
         accept_btn = Button(label="Apply & Reload", on_clicked=self.on_accept)
         button_box.add(accept_btn)
         root_box.add(button_box)
-
-    def create_key_bindings_tab(self):
-        scrolled_window = ScrolledWindow(
-            h_scrollbar_policy="never",
-            v_scrollbar_policy="automatic",
-            h_expand=True,
-            v_expand=True,
-            propagate_width=False,
-            propagate_height=False,
-        )
-
-        main_vbox = Box(orientation="v", spacing=10, style="margin: 15px;")
-        scrolled_window.add(main_vbox)
-
-        keybind_grid = Gtk.Grid()
-        keybind_grid.set_column_spacing(10)
-        keybind_grid.set_row_spacing(8)
-        keybind_grid.set_margin_start(5)
-        keybind_grid.set_margin_end(5)
-        keybind_grid.set_margin_top(5)
-        keybind_grid.set_margin_bottom(5)
-
-        action_label = Label(
-            markup="<b>Action</b>", h_align="start", style="margin-bottom: 5px;"
-        )
-        modifier_label = Label(
-            markup="<b>Modifier</b>", h_align="start", style="margin-bottom: 5px;"
-        )
-        separator_label = Label(
-            label="+", h_align="center", style="margin-bottom: 5px;"
-        )
-        key_label = Label(
-            markup="<b>Key</b>", h_align="start", style="margin-bottom: 5px;"
-        )
-
-        keybind_grid.attach(action_label, 0, 0, 1, 1)
-        keybind_grid.attach(modifier_label, 1, 0, 1, 1)
-        keybind_grid.attach(separator_label, 2, 0, 1, 1)
-        keybind_grid.attach(key_label, 3, 0, 1, 1)
-
-        self.entries = []
-        bindings = [
-            (f"Reload {APP_NAME_CAP}", "prefix_restart", "suffix_restart"),
-            ("Message", "prefix_axmsg", "suffix_axmsg"),
-            ("Dashboard", "prefix_dash", "suffix_dash"),
-            ("Bluetooth", "prefix_bluetooth", "suffix_bluetooth"),
-            ("Pins", "prefix_pins", "suffix_pins"),
-            ("Kanban", "prefix_kanban", "suffix_kanban"),
-            ("App Launcher", "prefix_launcher", "suffix_launcher"),
-            ("Tmux", "prefix_tmux", "suffix_tmux"),
-            ("Clipboard History", "prefix_cliphist", "suffix_cliphist"),
-            ("Toolbox", "prefix_toolbox", "suffix_toolbox"),
-            ("Overview", "prefix_overview", "suffix_overview"),
-            ("Wallpapers", "prefix_wallpapers", "suffix_wallpapers"),
-            ("Random Wallpaper", "prefix_randwall", "suffix_randwall"),
-            ("Audio Mixer", "prefix_mixer", "suffix_mixer"),
-            ("Emoji Picker", "prefix_emoji", "suffix_emoji"),
-            ("Power Menu", "prefix_power", "suffix_power"),
-            ("Toggle Caffeine", "prefix_caffeine", "suffix_caffeine"),
-            ("Toggle Bar", "prefix_toggle", "suffix_toggle"),
-            ("Reload CSS", "prefix_css", "suffix_css"),
-            (
-                "Restart with inspector",
-                "prefix_restart_inspector",
-                "suffix_restart_inspector",
-            ),
-        ]
-
-        for i, (label_text, prefix_key, suffix_key) in enumerate(bindings):
-            row = i + 1
-            binding_label = Label(label=label_text, h_align="start")
-            keybind_grid.attach(binding_label, 0, row, 1, 1)
-            prefix_entry = Entry(text=get_bind_var(prefix_key))
-            keybind_grid.attach(prefix_entry, 1, row, 1, 1)
-            plus_label = Label(label="+", h_align="center")
-            keybind_grid.attach(plus_label, 2, row, 1, 1)
-            suffix_entry = Entry(text=get_bind_var(suffix_key))
-            keybind_grid.attach(suffix_entry, 3, row, 1, 1)
-            self.entries.append((prefix_key, suffix_key, prefix_entry, suffix_entry))
-
-        main_vbox.add(keybind_grid)
-        return scrolled_window
 
     def create_appearance_tab(self):
         scrolled_window = ScrolledWindow(
@@ -665,31 +579,14 @@ class HyprConfGUI(Window):
         system_grid.set_margin_bottom(15)
         vbox.add(system_grid)
 
-        # Auto-append checkbox - first option
-        auto_append_label = Label(
-            label="Auto-append to hyprland.conf", h_align="start", v_align="center"
-        )
-        system_grid.attach(auto_append_label, 0, 0, 1, 1)
-        auto_append_switch_container = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            halign=Gtk.Align.START,
-            valign=Gtk.Align.CENTER,
-        )
-        self.auto_append_switch = Gtk.Switch(
-            active=get_bind_var("auto_append_hyprland"),
-            tooltip_text="Automatically append Ax-Shell source string to hyprland.conf",
-        )
-        auto_append_switch_container.add(self.auto_append_switch)
-        system_grid.attach(auto_append_switch_container, 1, 0, 1, 1)
-
-        # Monitor Selection - second option
+        # Monitor Selection
         monitor_header = Label(markup="<b>Monitor Selection</b>", h_align="start")
-        system_grid.attach(monitor_header, 0, 1, 2, 1)
+        system_grid.attach(monitor_header, 0, 0, 2, 1)
 
         monitor_label = Label(
             label="Show Ax-Shell on monitors:", h_align="start", v_align="center"
         )
-        system_grid.attach(monitor_label, 0, 2, 1, 1)
+        system_grid.attach(monitor_label, 0, 1, 1, 1)
 
         # Create monitor selection container
         self.monitor_selection_container = Box(
@@ -734,27 +631,27 @@ class HyprConfGUI(Window):
         )
         self.monitor_selection_container.add(hint_label)
 
-        system_grid.attach(self.monitor_selection_container, 1, 2, 1, 1)
+        system_grid.attach(self.monitor_selection_container, 1, 1, 1, 1)
 
         terminal_header = Label(markup="<b>Terminal Settings</b>", h_align="start")
-        system_grid.attach(terminal_header, 0, 3, 2, 1)
+        system_grid.attach(terminal_header, 0, 2, 2, 1)
         terminal_label = Label(label="Command:", h_align="start", v_align="center")
-        system_grid.attach(terminal_label, 0, 4, 1, 1)
+        system_grid.attach(terminal_label, 0, 3, 1, 1)
         self.terminal_entry = Entry(
             text=get_bind_var("terminal_command"),
             tooltip_text="Command used to launch terminal apps (e.g., 'kitty -e')",
             h_expand=True,
         )
-        system_grid.attach(self.terminal_entry, 1, 4, 1, 1)
+        system_grid.attach(self.terminal_entry, 1, 3, 1, 1)
         hint_label = Label(
             markup="<small>Examples: 'kitty -e', 'alacritty -e', 'foot -e'</small>",
             h_align="start",
         )
-        system_grid.attach(hint_label, 0, 5, 2, 1)
+        system_grid.attach(hint_label, 0, 4, 2, 1)
 
         hypr_header = Label(markup="<b>Hyprland Integration</b>", h_align="start")
-        system_grid.attach(hypr_header, 2, 3, 2, 1)
-        row = 4
+        system_grid.attach(hypr_header, 2, 2, 2, 1)
+        row = 3
         self.lock_switch = None
         if self.show_lock_checkbox:
             lock_label = Label(
@@ -1040,10 +937,6 @@ class HyprConfGUI(Window):
 
     def on_accept(self, widget):
         current_bind_vars_snapshot = {}
-        for prefix_key, suffix_key, prefix_entry, suffix_entry in self.entries:
-            current_bind_vars_snapshot[prefix_key] = prefix_entry.get_text()
-            current_bind_vars_snapshot[suffix_key] = suffix_entry.get_text()
-
         current_bind_vars_snapshot["wallpapers_dir"] = (
             self.wall_dir_chooser.get_filename()
         )
@@ -1065,9 +958,6 @@ class HyprConfGUI(Window):
         )
         current_bind_vars_snapshot["dock_icon_size"] = int(self.dock_size_scale.value)
         current_bind_vars_snapshot["terminal_command"] = self.terminal_entry.get_text()
-        current_bind_vars_snapshot["auto_append_hyprland"] = (
-            self.auto_append_switch.get_active()
-        )
         current_bind_vars_snapshot["corners_visible"] = self.corners_switch.get_active()
         current_bind_vars_snapshot["bar_workspace_show_number"] = (
             self.ws_num_switch.get_active()
@@ -1219,40 +1109,6 @@ class HyprConfGUI(Window):
                     print(f"Warning: Source hypridle config not found at {src}")
                 print(f"{time.time():.4f}: Finished replacing hypridle config.")
 
-            print(
-                f"{time.time():.4f}: Checking/Appending hyprland.conf source string..."
-            )
-            hypr_path = os.path.expanduser("~/.config/hypr/hyprland.conf")
-            try:
-                from .settings_constants import SOURCE_STRING
-
-                # Check if auto-append is enabled
-                auto_append_enabled = current_bind_vars_snapshot.get(
-                    "auto_append_hyprland", True
-                )
-                if auto_append_enabled:
-                    needs_append = True
-                    if os.path.exists(hypr_path):
-                        with open(hypr_path, "r") as f:
-                            if SOURCE_STRING.strip() in f.read():
-                                needs_append = False
-                    else:
-                        os.makedirs(os.path.dirname(hypr_path), exist_ok=True)
-
-                    if needs_append:
-                        with open(hypr_path, "a") as f:
-                            f.write("\n" + SOURCE_STRING)
-                        print(f"Appended source string to {hypr_path}")
-                    else:
-                        print("Source string already present in hyprland.conf")
-                else:
-                    print("Auto-append to hyprland.conf is disabled")
-            except Exception as e:
-                print(f"Error updating {hypr_path}: {e}")
-            print(
-                f"{time.time():.4f}: Finished checking/appending hyprland.conf source string."
-            )
-
             print(f"{time.time():.4f}: Running start_config()...")
             start_config()
             print(f"{time.time():.4f}: Finished start_config().")
@@ -1317,7 +1173,7 @@ class HyprConfGUI(Window):
             text="Reset all settings to defaults?",
         )
         dialog.format_secondary_text(
-            "This will reset all keybindings and appearance settings to their default values."
+            "This will reset all appearance settings to their default values."
         )
         if dialog.run() == Gtk.ResponseType.YES:
             from . import settings_utils
@@ -1325,10 +1181,6 @@ class HyprConfGUI(Window):
 
             settings_utils.bind_vars.clear()
             settings_utils.bind_vars.update(DEFAULTS.copy())
-
-            for prefix_key, suffix_key, prefix_entry, suffix_entry in self.entries:
-                prefix_entry.set_text(settings_utils.bind_vars[prefix_key])
-                suffix_entry.set_text(settings_utils.bind_vars[suffix_key])
 
             self.wall_dir_chooser.set_filename(
                 settings_utils.bind_vars["wallpapers_dir"]
@@ -1351,7 +1203,6 @@ class HyprConfGUI(Window):
             self.dock_hover_switch.set_sensitive(self.dock_switch.get_active())
             self.dock_size_scale.set_value(get_bind_var("dock_icon_size"))
             self.terminal_entry.set_text(settings_utils.bind_vars["terminal_command"])
-            self.auto_append_switch.set_active(get_bind_var("auto_append_hyprland"))
             self.ws_num_switch.set_active(get_bind_var("bar_workspace_show_number"))
             self.ws_chinese_switch.set_active(
                 get_bind_var("bar_workspace_use_chinese_numerals")

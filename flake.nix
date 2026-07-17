@@ -84,7 +84,6 @@
             pkgs.procps
             pkgs.awww
             pkgs.matugen
-            pkgs.socat
 
             # fabric-cli and gray
             (pkgs.callPackage ./nix/packages/fabric-cli.nix {})

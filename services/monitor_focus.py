@@ -1,7 +1,6 @@
-import json
-import subprocess
-import threading
 from typing import Optional
+
+from fabric.hyprland.widgets import get_hyprland_connection
 
 
 class Signal:
@@ -48,7 +47,7 @@ class MonitorFocusService:
         self._current_workspace = 1
         self._current_monitor_name = ""
         self._listening = False
-        self._thread = None
+        self._conn = None
         
         # Signals
         self.monitor_focused = Signal()
@@ -86,110 +85,78 @@ class MonitorFocusService:
             self._monitor_info = {}
     
     def start_listening(self):
-        """Start listening to Hyprland events in a separate thread."""
+        """Subscribe to Hyprland monitor/workspace events.
+
+        We reuse fabric's shared Hyprland connection (the same one the bar,
+        dock and overview use) rather than shelling out to `socat`. That drops
+        the external `socat` dependency and, crucially, the hardcoded
+        `/tmp/hypr/...` socket path, which has been wrong since Hyprland v0.40
+        moved the IPC sockets to `$XDG_RUNTIME_DIR/hypr/`. fabric parses each
+        socket2 line into a `HyprlandEvent` whose `.data` is the `>>`-payload
+        split on commas.
+        """
         if self._listening:
             return
-        
+
         self._listening = True
-        self._thread = threading.Thread(target=self._listen_to_hyprland, daemon=True)
-        self._thread.start()
-    
+        self._conn = get_hyprland_connection()
+        self._conn.connect("event::focusedmon", self._on_focusedmon)
+        self._conn.connect("event::workspace", self._on_workspace)
+
     def stop_listening(self):
-        """Stop listening to Hyprland events."""
+        """Stop reacting to Hyprland events.
+
+        fabric's connection is a process-global singleton shared with other
+        widgets, so we don't tear it down; we just flip the flag that gates our
+        handlers.
+        """
         self._listening = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
-    
-    def _listen_to_hyprland(self):
-        """Listen to Hyprland events via socat."""
+
+    def _on_focusedmon(self, _conn, event):
+        """focusedmon event: data = [monitor_name, workspace_name]."""
+        if not self._listening or len(event.data) < 2:
+            return
         try:
-            process = subprocess.Popen(
-                ["socat", "-U", "-", "UNIX-CONNECT:/tmp/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
-            )
-            
-            while self._listening and process.poll() is None:
-                if process.stdout:
-                    line = process.stdout.readline()
-                    if line:
-                        self._handle_hyprland_event(line.strip())
-                    
-        except (subprocess.SubprocessError, FileNotFoundError) as e:
-            print(f"MonitorFocusService: Error listening to Hyprland: {e}")
+            self._handle_focused_monitor(event.data[0], event.data[1])
         except Exception as e:
-            print(f"MonitorFocusService: Unexpected error: {e}")
-    
-    def _handle_hyprland_event(self, event_line: str):
-        """Parse and handle Hyprland event."""
+            print(f"MonitorFocusService: Error in _on_focusedmon: {e}")
+
+    def _on_workspace(self, _conn, event):
+        """workspace event: data = [workspace_name]."""
+        if not self._listening or not event.data:
+            return
         try:
-            if '>>' not in event_line:
-                return
-            
-            parts = event_line.split('>>')
-            if len(parts) < 2:
-                return
-            
-            event_type = parts[0]
-            event_data = parts[1]
-            
-            if event_type == "focusedmon":
-                self._handle_focused_monitor(event_data)
-            elif event_type == "workspace":
-                self._handle_workspace_change(event_data)
-                
+            self._handle_workspace_change(event.data[0])
         except Exception as e:
-            print(f"MonitorFocusService: Error handling event '{event_line}': {e}")
-    
-    def _handle_focused_monitor(self, data: str):
-        """Handle focusedmon event: monitor_name,workspace_name"""
+            print(f"MonitorFocusService: Error in _on_workspace: {e}")
+
+    def _handle_focused_monitor(self, monitor_name: str, workspace_name: str):
+        """Update state and emit for a monitor-focus change."""
+        # Update monitor mapping if we've not seen this monitor yet.
+        if monitor_name not in self._monitor_name_to_id:
+            self._update_monitor_mapping()
+
+        monitor_id = self._monitor_name_to_id.get(monitor_name, 0)
+
         try:
-            parts = data.split(',')
-            if len(parts) >= 2:
-                monitor_name = parts[0]
-                workspace_name = parts[1]
-                
-                # Update monitor mapping if needed
-                if monitor_name not in self._monitor_name_to_id:
-                    self._update_monitor_mapping()
-                
-                monitor_id = self._monitor_name_to_id.get(monitor_name, 0)
-                
-                # Extract workspace ID from name
-                try:
-                    workspace_id = int(workspace_name)
-                except ValueError:
-                    workspace_id = 1
-                
-                self._current_monitor_name = monitor_name
-                self._current_workspace = workspace_id
-                
-                # Emit signal
-                self.monitor_focused.emit(monitor_name, monitor_id, workspace_id)
-                
-        except Exception as e:
-            print(f"MonitorFocusService: Error in _handle_focused_monitor: {e}")
-    
-    def _handle_workspace_change(self, data: str):
-        """Handle workspace event: workspace_name"""
+            workspace_id = int(workspace_name)
+        except ValueError:
+            workspace_id = 1
+
+        self._current_monitor_name = monitor_name
+        self._current_workspace = workspace_id
+
+        self.monitor_focused.emit(monitor_name, monitor_id, workspace_id)
+
+    def _handle_workspace_change(self, workspace_name: str):
+        """Update state and emit for a workspace change."""
         try:
-            workspace_name = data.strip()
-            
-            # Extract workspace ID
-            try:
-                workspace_id = int(workspace_name)
-            except ValueError:
-                workspace_id = 1
-            
-            self._current_workspace = workspace_id
-            
-            # Emit signal
-            self.workspace_changed.emit(workspace_id, self._current_monitor_name)
-            
-        except Exception as e:
-            print(f"MonitorFocusService: Error in _handle_workspace_change: {e}")
+            workspace_id = int(workspace_name.strip())
+        except ValueError:
+            workspace_id = 1
+
+        self._current_workspace = workspace_id
+        self.workspace_changed.emit(workspace_id, self._current_monitor_name)
     
     def get_current_monitor_id(self) -> int:
         """Get current monitor ID."""
