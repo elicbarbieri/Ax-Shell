@@ -2,14 +2,20 @@
 
 pkgs.python3Packages.buildPythonPackage rec {
   pname = "fabric";
-  version = "2025-12-05";
+  # Upstream declares version "0.0.2" in pyproject.toml; the date suffix follows
+  # the nixpkgs unstable-snapshot convention to track the pinned git rev below.
+  version = "0.0.2-unstable-2026-07-24";
   pyproject = true;  # Required for Python 3.13+
+
+  # The pinned snapshot's metadata version ("0.0.2") intentionally differs from
+  # the nix `version` above, so skip the metadata/version equality check.
+  dontCheckPythonMetadata = true;
 
   src = pkgs.fetchFromGitHub {
     owner = "Fabric-Development";
     repo = "fabric";
-    rev = "8633df172a3ceee9222e7e583e93717f733d5618";
-    sha256 = "sha256-c56/WC4B4UDiKJ1R6Rz+io9Jt1Mq/WmIqjP1KYJvDf0=";
+    rev = "85cacf660b1a324525a4dd9b512521e55ef7f89b";
+    sha256 = "sha256-QV0t7y3ant10weKwlNoy3RMmOQ2rOr3/C0bgNkutoi8=";
   };
 
   # Patch pyproject.toml to accept PyGObject 3.52.3 instead of strict 3.50.0 pin
