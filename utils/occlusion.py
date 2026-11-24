@@ -8,17 +8,13 @@ def get_current_workspace():
     Get the current workspace ID using hyprctl.
     """
     try:
+        # JSON (text form unstable: 0.56 dropped the "ID" token → -1 → occlusion never fires)
         result = subprocess.run(
-            ["hyprctl", "activeworkspace"],
+            ["hyprctl", "-j", "activeworkspace"],
             capture_output=True,
             text=True
         )
-        # Assume the output similar to: "ID <number>"
-        # Extracting the number from the output
-        parts = result.stdout.split()
-        for i, part in enumerate(parts):
-            if part == "ID" and i + 1 < len(parts):
-                return int(parts[i+1])
+        return json.loads(result.stdout)["id"]
     except Exception as e:
         print(f"Error getting current workspace: {e}")
     return -1

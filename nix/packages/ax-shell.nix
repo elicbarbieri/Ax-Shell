@@ -25,6 +25,7 @@
 , hyprshot
 , playerctl
 , cava
+, jq
 , libnotify
 , dbus
 , dbus-glib
@@ -147,7 +148,7 @@ EOF
   preFixup = ''
     makeWrapperArgs+=(
       --prefix PYTHONPATH : "$out/lib/ax-shell"
-      --prefix PATH : "${lib.makeBinPath [ cava brightnessctl cliphist hyprshot playerctl imagemagick wl-clipboard procps awww matugen ]}"
+      --prefix PATH : "${lib.makeBinPath [ cava jq brightnessctl cliphist hyprshot playerctl imagemagick wl-clipboard procps awww matugen ]}"
       --set WAYLAND_DISPLAY "wayland-1"
       --set GDK_BACKEND "wayland"
       --set XDG_CURRENT_DESKTOP "Hyprland"

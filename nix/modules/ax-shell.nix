@@ -275,6 +275,7 @@ in
       
       # Configure pointer cursor for all environments
       home.pointerCursor = {
+        enable = true;
         gtk.enable = cfg.enableGtk;
         name = "Bibata-Modern-Classic";
         package = pkgs.bibata-cursors;

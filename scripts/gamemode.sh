@@ -1,9 +1,13 @@
 #!/usr/bin/env sh
 
+# JSON (0.55+ text form = "bool: true", not "int: 1")
+animations_enabled() {
+    hyprctl -j getoption animations:enabled | jq -r '.bool'
+}
+
 # Check if animations are disabled (game mode is active)
 check_gamemode() {
-    HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
-    if [ "$HYPRGAMEMODE" = 0 ] ; then 
+    if [ "$(animations_enabled)" = false ] ; then
         echo "t"
         return 0
     else
@@ -14,8 +18,7 @@ check_gamemode() {
 
 # Toggle game mode state
 toggle_gamemode() {
-    HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
-    if [ "$HYPRGAMEMODE" = 1 ] ; then
+    if [ "$(animations_enabled)" = true ] ; then
         # Hyprland 0.55 dropped the legacy `hyprctl keyword` parser ("keyword
         # can't work with non-legacy parsers. Use eval."). Runtime config
         # overrides now go through the Lua API via `hyprctl eval hl.config{...}`.
